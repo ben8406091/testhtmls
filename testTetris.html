@@ -1,0 +1,551 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="shortcut icon" href="http://www.google.com/favicon.ico" />
+    <meta charset="utf-8" />
+    <title>實驗俄羅斯方塊</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        td {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            text-align: center;
+            vertical-align: central;
+            border-collapse: separate;
+            border-spacing: 0;
+            border-radius: 10px;
+        }
+        /*邊界色*/
+        .bgc_wall {
+            background: black;
+        }
+        /*空間色*/
+        .bgc_space {
+            background: #babdb7;
+        }
+
+        /*磚塊顏色*/
+        /*I型*/
+        .brc_t0 {
+            background: #bf5814;
+        }
+        /*J型*/
+        .brc_t1 {
+            background: steelblue;
+        }
+        /*L型*/
+        .brc_t2 {
+            background: red;
+        }
+        /*O型*/
+        .brc_t3 {
+            background: green;
+        }
+        /*T型*/
+        .brc_t4 {
+            background: orange;
+        }
+        /*S型*/
+        .brc_t5 {
+            background: cyan;
+        }
+        /*Z型*/
+        .brc_t6 {
+            background: CadetBlue;
+        }
+    </style>
+    <script>
+        var tList = [];
+        var bg = [];//背景
+        var bgc = [];//背景色
+        var w = 20;//每格寬高
+        var tCurrent;//操控中方塊
+        var tVirtual;//探路用的方塊
+        var timer_update;
+        var timer_down;
+        var generate = true;//是否要建立磚塊
+        var score = 0;//分數
+
+        var isPlaying = false;//控制遊戲進行
+
+        $(function () {
+            init();//初始化背景及方塊
+            timer_update = setInterval(update, 100);//畫圖
+            timer_down = setInterval(down, 500);//方塊下降
+
+            initMap()
+        });
+
+        /**建立基礎地圖 */
+        function initMap() {
+            for (var i = 0; i < 20; i++) {
+                var insert_html = '<tr id="tr_' + i + '">●</tr>';
+                var insert_td = '';
+                for (var j = 0; j < 20; j++) {
+                    insert_td += '<td id="td_' + i + '_' + j + '" class=""></td>';
+                }
+                insert_html = insert_html.replace(/●/g, insert_td);
+                $('#tb').append(insert_html);
+            }
+        }
+
+        /**遊戲開始及初始設定 */
+        function gameStart() {
+            if (timer_update != null) {
+                clearInterval(timer_update);
+            }
+            if (timer_down != null) {
+                clearInterval(timer_down);
+            }
+
+            //清理地圖
+            //var canvas = document.getElementById('t1');
+            //const ctx = canvas.getContext('2d');
+            //ctx.clearRect(0, 0, canvas.width, canvas.height);//清除
+            //ctx.beginPath();
+            var bc = 'bgc_wall';//邊界色
+            var sc = 'bgc_space';//空間色
+            bg = [];
+            bgc = [];
+            for (var i = 0; i < 19; i++) {//一排40格
+                bg.push([20, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 20]);
+                bgc.push([bc, sc, sc, sc, sc, sc, sc, sc, sc, sc,
+                    sc, sc, sc, sc, sc, sc, sc, sc, sc, bc]);
+            }
+            bg.push([20, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+                10, 10, 10, 10, 10, 10, 10, 10, 10, 20]);
+            bgc.push([bc, bc, bc, bc, bc, bc, bc, bc, bc, bc,
+                bc, bc, bc, bc, bc, bc, bc, bc, bc, bc]);
+
+
+
+            //開始計時
+            timer_update = setInterval(update, 100);//畫圖
+            timer_down = setInterval(down, 500);//方塊下降
+            $('#btn_Start').attr('disabled', 'disabled');
+            $('#btn_Start').val('重來');
+            $('#btn_Pause').removeAttr('disabled');
+            $('#btn_Contiune').attr('disabled', 'disabled');
+            isPlaying = true;
+            score = 0;
+            $('#lb_score').text(score);
+        }
+
+        /**初始化 */
+        function init() {
+            /*  磚塊原理：
+             *  利用4*4的方格來記住各種磚塊的形狀(含旋轉)
+             *  事先定義好旋轉四態以節省旋轉演算法
+             */
+
+            //定義方塊
+            //I型
+            /*   ｏｏｏｏ　ｏ●ｏｏ　ｏｏｏｏ　ｏ●ｏｏ
+             * 　ｏｏｏｏ　ｏ●ｏｏ  ｏｏｏｏ　ｏ●ｏｏ
+             * 　●●●●　ｏ●ｏｏ  ●●●●　ｏ●ｏｏ
+             * 　ｏｏｏｏ　ｏ●ｏｏ  ｏｏｏｏ  ｏ●ｏｏ
+             **/
+            var t0 = [4];
+            t0[0] = [[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0]];
+            t0[1] = [[0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]];
+            t0[2] = [[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0]];
+            t0[3] = [[0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 0, 0]];
+            t0.c = 'brc_t0';
+
+            //J型
+            /*   ｏ●ｏｏ　ｏｏｏｏ　ｏ●●ｏ　ｏｏｏｏ
+             * 　ｏ●ｏｏ　●●●ｏ  ｏ●ｏｏ　ｏ●ｏｏ
+             * 　●●ｏｏ　ｏｏ●ｏ  ｏ●ｏｏ　ｏ●●●
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            var t1 = [4];
+            t1[0] = [[0, 1, 0, 0], [0, 1, 0, 0], [1, 1, 0, 0], [0, 0, 0, 0]];
+            t1[1] = [[0, 0, 0, 0], [1, 1, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]];
+            t1[2] = [[0, 1, 1, 0], [0, 1, 0, 0], [0, 1, 0, 0], [0, 0, 0, 0]];
+            t1[3] = [[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 1, 1], [0, 0, 0, 0]];
+            t1.c = 'brc_t1';
+
+            //L型
+            /*   ｏｏ●ｏ　ｏｏｏｏ　ｏ●●ｏ　ｏｏｏｏ
+             * 　ｏｏ●ｏ　ｏ●●●  ｏｏ●ｏ　ｏｏ●ｏ
+             * 　ｏｏ●●　ｏ●ｏｏ  ｏｏ●ｏ　●●●ｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            var t2 = [4];
+            t2[0] = [[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 1], [0, 0, 0, 0]];
+            t2[1] = [[0, 0, 0, 0], [0, 1, 1, 1], [0, 1, 0, 0], [0, 0, 0, 0]];
+            t2[2] = [[0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]];
+            t2[3] = [[0, 0, 0, 0], [0, 0, 1, 0], [1, 1, 1, 0], [0, 0, 0, 0]];
+            t2.c = 'brc_t2';
+
+            //O型
+            /*   ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ
+             * 　ｏ●●ｏ　ｏ●●ｏ  ｏ●●ｏ　ｏ●●ｏ
+             * 　ｏ●●ｏ　ｏ●●ｏ  ｏ●●ｏ　ｏ●●ｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            var t3 = [4];
+            t3[0] = [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]];
+            t3[1] = [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]];
+            t3[2] = [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]];
+            t3[3] = [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]];
+            t3.c = 'brc_t3';
+
+            //T型
+            /*   ｏｏ●ｏ　ｏｏｏｏ　ｏｏ●ｏ　ｏｏ●ｏ
+             * 　ｏ●●ｏ　ｏ●●●  ｏｏ●●　ｏ●●●
+             * 　ｏｏ●ｏ　ｏｏ●ｏ  ｏｏ●ｏ　ｏｏｏｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            var t4 = [4];
+            t4[0] = [[0, 0, 1, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]];
+            t4[1] = [[0, 0, 0, 0], [0, 1, 1, 1], [0, 0, 1, 0], [0, 0, 0, 0]];
+            t4[2] = [[0, 0, 1, 0], [0, 0, 1, 1], [0, 0, 1, 0], [0, 0, 0, 0]];
+            t4[3] = [[0, 0, 1, 0], [0, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]];
+            t4.c = 'brc_t4';
+
+            //S型
+            /*   ｏｏ●●　ｏ●ｏｏ　ｏｏ●●　ｏ●ｏｏ
+             * 　ｏ●●ｏ　ｏ●●ｏ  ｏ●●ｏ　ｏ●●ｏ
+             * 　ｏｏｏｏ　ｏｏ●ｏ  ｏｏｏｏ　ｏｏ●ｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            var t5 = [4];
+            t5[0] = [[0, 0, 1, 1], [0, 1, 1, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+            t5[1] = [[0, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]];
+            t5[2] = [[0, 0, 1, 1], [0, 1, 1, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+            t5[3] = [[0, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]];
+            t5.c = 'brc_t5';
+
+            //Z型
+            /*   ●●ｏｏ　ｏｏ●ｏ　●●ｏｏ　ｏｏ●ｏ
+             * 　ｏ●●ｏ　ｏ●●ｏ  ｏ●●ｏ　ｏ●●ｏ
+             * 　ｏｏｏｏ　ｏ●ｏｏ  ｏｏｏｏ　ｏ●ｏｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            var t6 = [4];
+            t6[0] = [[1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+            t6[1] = [[0, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]];
+            t6[2] = [[1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+            t6[3] = [[0, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0], [0, 0, 0, 0]];
+            t6.c = 'brc_t6';
+
+
+            //裝進範本表(prefab組)
+            tList.push(t0);
+            tList.push(t1);
+            tList.push(t2);
+            tList.push(t3);
+            tList.push(t4);
+            tList.push(t5);
+            tList.push(t6);
+
+            var bc = 'bgc_wall';//邊界色
+            var sc = 'bgc_space';//空間色
+            /* 背景原理：
+             * 將空閒空間定義為0、左右牆=20，底下=10
+             * 用於將磚塊九宮格移動時判斷是否加總>1(落地或撞牆)
+             * 顏色則另外定義背景色另存是用於磚塊落地後加入背景(但保留磚塊原始色)
+             * 20　０　０　０　０　20
+             * 20　０　０　０　０　20
+             * 20　０　０　０　０　20
+             * 20　10　10　10　10　20
+             */
+
+            for (var i = 0; i < 19; i++) {//一排40格
+                bg.push([20, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 20]);
+                bgc.push([bc, sc, sc, sc, sc, sc, sc, sc, sc, sc,
+                    sc, sc, sc, sc, sc, sc, sc, sc, sc, bc]);
+            }
+            bg.push([20, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+                10, 10, 10, 10, 10, 10, 10, 10, 10, 20]);
+            bgc.push([bc, bc, bc, bc, bc, bc, bc, bc, bc, bc,
+                bc, bc, bc, bc, bc, bc, bc, bc, bc, bc]);
+        }
+
+        /**畫圖 */
+        function paint() {
+            //var canvas = document.getElementById('t1');
+            //const ctx = canvas.getContext('2d');
+            //ctx.clearRect(0, 0, canvas.width, canvas.height);//清除
+            //ctx.beginPath();
+
+            $('#tb td').attr("class", '');
+            //$('#tb td').text('');
+
+            //畫背景
+            for (var i = 0; i < bg.length; i++) {
+                for (var j = 0; j < bg[0].length; j++) {
+                    //ctx.beginPath();
+                    //ctx.fillStyle = bgc[i][j];
+                    //ctx.strokeStyle = '#FFFFFF';
+                    //ctx.rect(j * w, i * w, w, w);
+                    //ctx.fillRect(j * w, i * w, w, w);
+                    //ctx.stroke();
+
+                    //$('#td_' + i + '_' + j).text(bg[i][j]);
+                    $('#td_' + i + '_' + j).attr('class', bgc[i][j]);
+                }
+            }
+
+
+            //畫方塊
+            /*  假設方塊為：
+             * ｏｏ●ｏ    0010
+             * ｏ●●ｏ => 0110
+             * ｏｏ●ｏ    0010
+             * ｏｏｏｏ    0000
+             * 將1的地方著色
+             */
+            //注意X跟Y順序要顛倒，對應table的tr和td
+            for (var k = 0; k < 4; k++) {
+                for (var l = 0; l < 4; l++) {
+                    if (tCurrent != null) {
+                        if (tCurrent[tCurrent.idx][l][k] == 1) {
+                            //ctx.fillStyle = tCurrent.c;
+                            //ctx.fillRect((tCurrent.x + k) * w, (tCurrent.y + l) * w, w, w);
+                            //ctx.strokeStyle = '#FFFFFF';
+                            //ctx.rect((tCurrent.x + k) * w, (tCurrent.y + l) * w, w, w);
+                            //ctx.stroke();
+
+                            //$('#td_' + (tCurrent.y + l) + '_' + (tCurrent.x + k)).text(tCurrent[tCurrent.idx][l][k]);
+                            $('#td_' + (tCurrent.y + l) + '_' + (tCurrent.x + k)).attr('class', tCurrent.c);
+                        }
+                    }
+
+                }
+            }
+        }
+
+        /**檢查允許移動 */
+        function allowMove() {
+            /*  原理：
+             *  先將探路用的分身方塊(預左右、旋轉變形、落下)存入tVirtual
+             *  檢查tVirtual的九宮格，如果第N格加上背景格>1表示撞到東西了
+             *  舉例:
+             *  10 ｏ １ ｏ          10 １ ｏ
+             *  10 １ １ ｏ　往左=>  11 １ ｏ
+             *  10 ｏ １ ｏ          10 １ ｏ
+             *  10 ｏ ｏ ｏ          10 ｏ ｏ
+             *  有格子變成11表示撞牆了
+             *  同理：底部是20，當1變成21表示落地
+             */
+
+            for (var k = 0; k < 4; k++) {
+                for (var l = 0; l < 4; l++) {
+                    //檢查：如果探路方塊的第N格+背景格的值=11
+                    //背景底是10，方塊本體=1,相加=11表示落地
+                    //背景牆壁是20，方塊本體=1,相加=21表示落地
+
+                    if (tVirtual[tVirtual.idx][k][l] == 1) {
+                        if (tVirtual[tVirtual.idx][k][l] + bg[tVirtual.y + k][tVirtual.x + l] == 11//地板
+                            || tVirtual[tVirtual.idx][k][l] + bg[tVirtual.y + k][tVirtual.x + l] == 21) {//牆壁
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        /**控制中磚塊下降+建立新方塊 */
+        function down() {
+            if (isPlaying == false) {//非暫停時才能操作方向
+                return;
+            }
+
+            if (generate) {//建造下一個磚塊
+                tCurrent = tList[Math.floor(Math.random() * 6)];
+                tCurrent.idx = Math.floor(Math.random() * 3);//旋轉索引{0~3}
+                tCurrent.x = 9;//相對中心座標
+                tCurrent.y = 1;
+                generate = false;
+
+                //檢查是否不能動
+                tVirtual = JSON.parse(JSON.stringify(tCurrent));
+                tVirtual.y = tCurrent.y;
+                tVirtual.x = tCurrent.x;
+                tVirtual.idx = tCurrent.idx;
+                if (allowMove() == false) {
+                    $('#btn_Pause').attr('disabled', 'disabled');
+                    //停止計時器
+                    $('#btn_Start').removeAttr('disabled');
+                    clearInterval(timer_update);
+                    clearInterval(timer_down);
+                    alert("GameOver!");
+                }
+            }
+            else {
+                //複製現有操控方塊
+                tVirtual = JSON.parse(JSON.stringify(tCurrent));
+                tVirtual.y = tCurrent.y + 1;
+                tVirtual.x = tCurrent.x;
+                tVirtual.idx = tCurrent.idx;
+
+                if (allowMove()) {
+                    tCurrent.y++;//下降
+                }
+                else {
+                    //把方塊存入背景
+                    /*  原理：當移動中的磚塊落地時，將目前佔有的位置改寫成10
+                     *  (和牆壁同值表示不可穿越)
+                     *  但為了不要和牆壁顏色混淆，需將原本顏色記錄下來
+                     *  舉例：
+                     *  ｏ ｏ １ ｏ                         ｏ ｏ 10 ｏ
+                     *  ｏ １ １ ｏ 落地了，被吸收為牆 =>　 ｏ 10 10 ｏ
+                     *  ｏ ｏ １ ｏ                         ｏ ｏ 10 ｏ
+                     *  20 20 20 20                         20 20 20 20
+                     */
+
+                    for (var k = 0; k < 4; k++) {
+                        for (var l = 0; l < 4; l++) {
+                            if (tCurrent[tCurrent.idx][k][l] == 1) {
+                                bg[tCurrent.y + k][tCurrent.x + l] = 10;
+                                bgc[tCurrent.y + k][tCurrent.x + l] = tCurrent.c;//儲存方塊原有色
+                            }
+                        }
+                    }
+                    generate = true;//準備建造下一個磚塊
+
+                    //檢查消除行(倒數第一排是地板不能消，從倒數第二排算)
+                    for (var i = bg.length - 2; i > 1; i--) {
+                        var sum = 0;
+                        for (var j = 0; j < bg[0].length; j++) {
+                            sum += bg[i][j];
+                        }
+                        if (sum == 220) {//如果此列已被填滿
+                            /*每一列共=兩邊牆+空閒列位置的數(18) = 20 + 10 + 10 + 10 + 10 ... +20=220
+                             * 得分時依序把上面的列取代下來
+                             * 20 ｏ ｏ 10 ｏ ｏ ｏ 10 ｏ 20
+                             * 20 10 10 10 10 10 10 10 10 20
+                             * 20 10 10 10 10 10 10 10 10 20 =>他是地板不能消
+                             * ↓置換
+                             * 20 ｏ ｏ ｏ ｏ ｏ ｏ ｏ ｏ 20
+                             * 20 ｏ ｏ 10 ｏ ｏ ｏ 10 ｏ 20
+                             * 20 10 10 10 10 10 10 10 10 20 =>他是地板不能消
+                            */
+                            for (var k = i; k > 0; k--) {
+                                for (var l = 0; l < bg[0].length; l++) {
+                                    //把上面那列置換下來
+                                    bg[k][l] = bg[k - 1][l];
+                                    bgc[k][l] = bgc[k - 1][l];
+                                }
+                            }
+                            i = bg.length - 2;//重掃一輪，確保消除多條時都能被檢查到
+                            score++;
+                            $('#lb_score').text(score);
+                        }
+                    }
+
+                }
+            }
+        }
+
+        /**update */
+        function update() {
+            if (isPlaying == false) {//非暫停時才能操作方向
+                return;
+            }
+            paint();
+        }
+
+        //讀取按鍵方向
+        document.onkeydown = function (e) {  //對整個頁面文件監聽
+            keyNum = window.event ? e.keyCode : e.which;  //獲取被按下的鍵值
+
+            //P暫停
+            if (keyNum == 80) {
+                $('#btn_Pause').click();
+            }
+            if (isPlaying == false) {//非暫停時才能操作方向
+                return;
+            }
+
+            //上W
+            if (keyNum == 87 || keyNum == 38) {
+                //複製現有操控方塊
+                tVirtual = JSON.parse(JSON.stringify(tCurrent));
+                tVirtual.y = tCurrent.y;
+                tVirtual.x = tCurrent.x;
+                tVirtual.idx = (tCurrent.idx + 1) % 4;//旋轉index = 0~3，這樣能讓旋轉值一直保持在0~3
+                if (allowMove()) {
+                    //旋轉
+                    tCurrent.idx = (tCurrent.idx + 1) % 4;
+                }
+            }
+            //下S
+            if (keyNum == 83 || keyNum == 40) {
+                //加速
+                down();
+            }
+            //左A
+            if (keyNum == 65 || keyNum == 37) {
+                //複製現有操控方塊
+                tVirtual = JSON.parse(JSON.stringify(tCurrent));
+                tVirtual.y = tCurrent.y;
+                tVirtual.x = tCurrent.x - 1;
+                tVirtual.idx = tCurrent.idx;
+                if (allowMove()) {
+                    tCurrent.x--;
+                }
+            }
+            //右D
+            if (keyNum == 68 || keyNum == 39) {
+                tVirtual = JSON.parse(JSON.stringify(tCurrent));
+                tVirtual.y = tCurrent.y;
+                tVirtual.x = tCurrent.x + 1;
+                tVirtual.idx = tCurrent.idx;
+                if (allowMove()) {
+                    tCurrent.x++;
+                }
+            }
+            //空白鍵瞬間放下
+            if (keyNum == 32) {
+                while (allowMove()) {//自動降落直到不能再下降為止
+                    down();
+                }
+            }
+        }
+
+        /**遊戲暫停 */
+        function gamePause() {
+            clearInterval(timer_update);
+            clearInterval(timer_down);
+            $('#btn_Start').removeAttr('disabled');
+            $('#btn_Pause').attr('disabled', 'disabled');
+            $('#btn_Contiune').removeAttr('disabled');
+            isPlaying = false;
+        }
+
+        /**遊戲繼續 */
+        function gameContiune() {
+            timer_update = setInterval(update, 100);//畫圖
+            timer_down = setInterval(down, 500);//方塊下降
+            $('#btn_Start').attr('disabled', 'disabled');
+            $('#btn_Pause').removeAttr('disabled');
+            $('#btn_Contiune').attr('disabled', 'disabled');
+            isPlaying = true;
+        }
+    </script>
+</head>
+<body>
+    <div align="center">
+        <input id="btn_Start" type="button" value="開始" onclick="gameStart()" style="        width: 100px;
+        height: 40px;
+        font-size: 30px" />
+        <input id="btn_Pause" type="button" value="暫停" onclick="gamePause()" disabled="disabled" style="width: 100px; height: 40px; font-size: 30px " />
+        <input id="btn_Contiune" type="button" value="繼續" onclick="gameContiune()" style="width:100px;height:40px;font-size:30px" />
+    </div>
+    <div align="center" style="font-size:30px">
+        分數：<span id="lb_score">0</span>
+    </div>
+    <div align="center">
+        <!--<canvas id="t1" width="400" height="400" style="border:1px solid black;display: inline-block;"></canvas>-->
+        <table id="tb" style="border: 3px #cccccc solid;width: 30%;height: 600px;border-collapse: separate;border-spacing: 0;" border='1' align="center">
+        </table>
+    </div>
+</body>
+</html>

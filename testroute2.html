@@ -1,0 +1,438 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="shortcut icon" href="http://www.google.com/favicon.ico" />
+    <meta charset="utf-8" />
+    <title>實驗尋路演算法</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        .back_start {
+            background-color: #22ae12;
+        }
+
+        .back_end {
+            background-color: #8f1b1b;
+        }
+
+        .back_wall {
+            background-color: #000000;
+        }
+
+        .back_routes {
+            background-color: #22ae12;
+        }
+
+        .back_boder {
+            background-color: #a0a0a0;
+        }
+
+        td {
+            width: 30px;
+        }
+    </style>
+    <script>
+        var tablesize = 30;
+        //起終點
+        var startpoint = [-1, -1];
+        var endpoint = [-1, -1];
+        var dt_close = [];//暫時路徑表
+        var timer_goroute;//紀錄走路的timer
+        var drow_route = [];//繪圖路徑表
+
+        $(function () {
+            //隨機設置起點
+            var ranX = Math.floor(Math.random() * tablesize + 1);
+            var ranY = Math.floor(Math.random() * tablesize + 1);
+            startpoint = [ranX, ranY];
+            endpoint = [ranX, ranY];
+            //建置表格
+            inittables(tablesize);
+        });
+
+        /**
+         * 建置基礎地圖
+         * @param tablesize
+         */
+        function inittables(tablesize) {
+            for (var i = 0; i <= tablesize; i++) {
+                var inserttr = '<tr id="tr_' + i + '">●</tr>';
+                var inserttds = '';
+                for (var j = 0; j <= tablesize; j++) {
+                    if (i == 0) {
+                        inserttds += '<td id="td_' + i + '_' + j + '" class="back_boder" oncontextmenu="event.preventDefault();">' + j + '</td>';
+                    }
+                    else {
+                        if (j == 0) {
+                            inserttds += '<td id="td_' + i + '_' + j + '" class="back_boder" oncontextmenu="event.preventDefault();">' + i + '</td>';
+                        }
+                        else {
+                            inserttds += '<td id="td_' + i + '_' + j + '" class="" onmousedown="changewall(this.id,event)" oncontextmenu="event.preventDefault();"></td>';
+                        }
+                    }
+                }
+                inserttr = inserttr.replace(/●/g, inserttds);
+                $('#gv').append(inserttr);
+            }
+
+            //起終點著色
+            $('#td_' + startpoint[0] + '_' + startpoint[1]).attr('class', 'back_start');
+            //$('#td_' + endpoint[0] + '_' + endpoint[1]).attr('class', 'back_end');
+        }
+
+        /**
+         * 點格:右鍵築牆,左鍵設新終點
+         * @param objid
+         */
+        function changewall(objid, e) {
+            var xpoint = objid.split('_')[1];
+            var ypoint = objid.split('_')[2];
+            //排除邊界
+            if (xpoint == 0 || ypoint == 0) {
+                return false;
+            }
+
+            if (e.button == 2) {//右鍵
+                //排除起終點
+                if (!((xpoint == startpoint[0] && ypoint == startpoint[1]) ||
+                    (xpoint == endpoint[0] && ypoint == endpoint[1]))) {
+                    //切換著色
+                    if ($('#' + objid).attr('class') == 'back_wall') {
+                        $('#' + objid).attr('class', '');
+                    }
+                    else {
+                        $('#' + objid).attr('class', 'back_wall');
+                    }
+                }
+            }
+            else if (e.button == 0) {//左鍵
+                //重設終點
+                //排除起終點及牆壁
+                if (!((xpoint == startpoint[0] && ypoint == startpoint[1]) ||
+                    (xpoint == endpoint[0] && ypoint == endpoint[1]) ||
+                    ($('#' + objid).attr('class') == 'back_wall'))) {
+                    //切換著色
+                    if ($('#td_' + endpoint[0] + '_' + endpoint[1]).attr('class') != 'back_start') {
+                        $('#td_' + endpoint[0] + '_' + endpoint[1]).attr('class', '');
+                        endpoint = [parseInt(xpoint), parseInt(ypoint)];
+                        $('#td_' + endpoint[0] + '_' + endpoint[1]).attr('class', 'back_end');
+                    }
+                    else {
+                        $('#td_' + endpoint[0] + '_' + endpoint[1]).attr('class', 'back_start');
+                        endpoint = [parseInt(xpoint), parseInt(ypoint)];
+                        $('#td_' + endpoint[0] + '_' + endpoint[1]).attr('class', 'back_end');
+                    }
+
+                    //更新起點
+                    var isfindstart = false;
+                    for (var i = 1; i <= tablesize; i++) {
+                        for (var j = 1; j <= tablesize; j++) {
+                            if ($('#td_' + i + '_' + j).attr('class') == 'back_routes') {
+                                startpoint = [i, j];
+                                $('#td_' + i + '_' + j).attr('class', 'back_start');
+                                isfindstart = true;
+                                break;
+                            }
+                        }
+                        if (isfindstart == true) {
+                            break;
+                        }
+                    }
+
+                    //清空路由重找
+                    dt_close = [];
+                    drow_route = [];
+                    clearInterval(timer_goroute);
+                    AstareFind();
+                    drowroute();
+                }
+            }
+        }
+
+        /**A*找路法 */
+        function AstareFind() {
+            try {
+                //關閉表(已檢查)，先放起點
+                dt_close = [
+                    {
+                        "Xpoint": startpoint[0],
+                        "Ypoint": startpoint[1],
+                        "FatherX": startpoint[0],
+                        "FatherY": startpoint[1]
+                    }
+                ];
+
+                //開放表(待檢查的點)
+                var dt_open = [];
+
+                //開始找路
+                var isfinding = true;
+                var temp_Gscore = 0;//記錄現在踩點的G分數
+                var nowpoint = [startpoint[0], startpoint[1]];//現在點=起始點
+                while (isfinding) {
+                    //取得候選點清單,先搜尋附近可走路
+                    var templist = [];
+                    //if ($('#ckb_canslant').prop('checked') == true) {
+                    templist.push({ "Xpoint": nowpoint[0] - 1, "Ypoint": nowpoint[1] - 1 });//左上
+                    templist.push({ "Xpoint": nowpoint[0] - 1, "Ypoint": nowpoint[1] });//正上
+                    templist.push({ "Xpoint": nowpoint[0] - 1, "Ypoint": nowpoint[1] + 1 });//右上
+                    templist.push({ "Xpoint": nowpoint[0], "Ypoint": nowpoint[1] - 1 });//左中
+                    templist.push({ "Xpoint": nowpoint[0], "Ypoint": nowpoint[1] + 1 });//右中
+                    templist.push({ "Xpoint": nowpoint[0] + 1, "Ypoint": nowpoint[1] - 1 });//左下
+                    templist.push({ "Xpoint": nowpoint[0] + 1, "Ypoint": nowpoint[1] });//正下
+                    templist.push({ "Xpoint": nowpoint[0] + 1, "Ypoint": nowpoint[1] + 1 });//右下
+                    //}
+                    //else {
+                    //    templist.push({ "Xpoint": nowpoint[0] - 1, "Ypoint": nowpoint[1] });//正上
+                    //    templist.push({ "Xpoint": nowpoint[0], "Ypoint": nowpoint[1] - 1 });//左中
+                    //    templist.push({ "Xpoint": nowpoint[0], "Ypoint": nowpoint[1] + 1 });//右中
+                    //    templist.push({ "Xpoint": nowpoint[0] + 1, "Ypoint": nowpoint[1] });//正下
+                    //}
+                    //篩選
+                    for (var i = 0; i < templist.length; i++) {
+                        //加入前提：不在開放列表、不在封閉列表、不是牆壁、不是邊際
+                        //不在開放表內
+                        if (($.grep(dt_open, function (item, index) {
+                            return (item.Xpoint == templist[i].Xpoint && item.Ypoint == templist[i].Ypoint);
+                        })).length == 0) {
+                            //不在封閉表內，不是邊際
+                            if ((($.grep(dt_close, function (item, index) {
+                                return (item.Xpoint == templist[i].Xpoint && item.Ypoint == templist[i].Ypoint);
+                            })).length == 0
+                            ) && templist[i].Xpoint > 0 && templist[i].Ypoint > 0 && templist[i].Xpoint < tablesize + 1 && templist[i].Ypoint < tablesize + 1
+                            ) {
+                                //不是牆壁
+                                if ($('#td_' + templist[i].Xpoint + '_' + templist[i].Ypoint).attr('class') != 'back_wall') {
+                                    //計算成本
+                                    //H分
+                                    var Hscore = (Math.abs(endpoint[0] - templist[i].Xpoint) + Math.abs(endpoint[1] - templist[i].Ypoint)) * 10;
+                                    //G分
+                                    var Xmove = Math.abs(templist[i].Xpoint - nowpoint[0]);
+                                    var Ymove = Math.abs(templist[i].Ypoint - nowpoint[1]);
+                                    //var Gscore = (Math.min(Xmove, Ymove) * 14) + (Math.abs(Xmove - Ymove) * 10);
+                                    var Gscore = (Math.min(Xmove, Ymove) * 10) + (Math.abs(Xmove - Ymove) * 10);
+                                    //F分
+                                    var Fscore = Hscore + Gscore;
+
+                                    //加入開放表
+                                    dt_open.push(
+                                        {
+                                            "Xpoint": templist[i].Xpoint,
+                                            "Ypoint": templist[i].Ypoint,
+                                            "FatherX": nowpoint[0],
+                                            "FatherY": nowpoint[1],
+                                            "Gscore": Gscore,
+                                            "Hscore": Hscore,
+                                            "Fscore": Fscore
+                                        }
+                                    );
+                                }
+                            }
+                        }
+                        else {//優化：如果已在開放表
+                            //如果重新估算它的G值更小則記下這個路徑
+                            var testG_Xmove = Math.abs(templist[i].Xmove - startpoint[0]);
+                            var testG_Ymove = Math.abs(templist[i].Ymove - startpoint[1]);
+                            //var testG = (Math.min(testG_Xmove, testG_Ymove) * 14) + (Math.abs(testG_Xmove - testG_Ymove) * 10);
+                            var testG = (Math.min(testG_Xmove, testG_Ymove) * 10) + (Math.abs(testG_Xmove - testG_Ymove) * 10);
+                            for (var j = 0; j < dt_open.length; j++) {
+                                if (dt_open[j].Xpoint == templist[i].Xpoint && dt_open[j].Ypoint == templist[i].Ypoint) {
+                                    var beforeG = dt_open[j].Gscore;
+                                    if (testG < beforeG) {
+                                        //加入父節點並更新G分
+                                        dt_open[j].FatherX = nowpoint[0];
+                                        dt_open[j].FatherY = nowpoint[1];
+                                        dt_open[j].Gscore = testG;
+                                        dt_open[j].Fscore = testG + (dt_open[j].Hscore);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+
+                    //終止條件，如果已經把終點放入關閉表則停止/或是開放表已經清空
+                    if (($.grep(dt_close, function (item, index) {
+                        return (item.Xpoint == endpoint[0] && item.Ypoint == endpoint[1]);
+                    })).length >= 1
+                        || dt_open.length == 0
+                    ) {
+                        isfinding = false;
+                        break;
+                    }
+
+                    //尋找最低F值的格子並且移動到關閉列表(F分小到大排序)
+                    dt_open = JsonSort(dt_open, 'Fscore');
+                    if (dt_open.length > 0) {
+                        //存入關閉列表
+                        dt_close.push(
+                            {
+                                "Xpoint": dt_open[0].Xpoint,
+                                "Ypoint": dt_open[0].Ypoint,
+                                "FatherX": dt_open[0].FatherX,
+                                "FatherY": dt_open[0].FatherY
+                            });
+                        //記錄目前的G分數
+                        temp_Gscore = dt_open[0].Gscore;
+                        //移動
+                        nowpoint[0] = dt_open[0].Xpoint;
+                        nowpoint[1] = dt_open[0].Ypoint;
+                        //從開放列表中移除
+                        dt_open.splice(0, 1);
+                    }
+                }
+            } catch (e) {
+                alert(e);
+            }
+        }
+
+        /**清除筆跡 */
+        function clearRouts() {
+            for (var i = 1; i <= tablesize; i++) {
+                for (var j = 1; j <= tablesize; j++) {
+                    if ($('#td_' + i + '_' + j).attr('class') == 'back_routes') {
+                        $('#td_' + i + '_' + j).attr('class', '')
+                    }
+                    $('#td_' + i + '_' + j).text('')
+                }
+            }
+        }
+
+        /*
+        @function     JsonSort 對json排序
+        @param        json     用來排序的json
+        @param        key      排序的鍵值
+        */
+        function JsonSort(json, key) {
+            for (var j = 1, jl = json.length; j < jl; j++) {
+                var temp = json[j],
+                    val = temp[key],
+                    i = j - 1;
+                while (i >= 0 && json[i][key] > val) {
+                    json[i + 1] = json[i];
+                    i = i - 1;
+                }
+                json[i + 1] = temp;
+
+            }
+            return json;
+
+        }
+        
+        /**
+         * 將傳入的路徑進行著色
+         * @param dt_routs
+         */
+        function drowroute() {
+            var before_x = -1;
+            var before_y = -1;
+            var step = 0;
+            //var drow_route = [];
+
+            //解析實際路徑
+            for (var i = dt_close.length - 1; i >= 0; i--) {
+                var nowX = dt_close[i].Xpoint;
+                var nowY = dt_close[i].Ypoint;
+                var nowFX = dt_close[i].FatherX;
+                var nowFY = dt_close[i].FatherY;
+
+                if (nowX == startpoint[0] && nowY == startpoint[1]) {//到起點就停止
+                    break;
+                }
+
+                if (before_x == -1) {//畫第1步
+                    if (!((nowX == startpoint[0] && nowY == startpoint[1])//排除起終點
+                        || (nowX == endpoint[0] && nowY == endpoint[1]))) {
+                        //著色
+                        drow_route.push({
+                            "nowX": nowX,
+                            "nowY": nowY,
+                            "nowFX": nowFX,
+                            "nowFY": nowFY
+                        });
+                        step++;
+                    }
+                    before_x = dt_close[i].FatherX;
+                    before_y = dt_close[i].FatherY;
+                }
+                else {
+                    //著色父節點
+                    if (!(dt_close[i].Xpoint == before_x && dt_close[i].Ypoint == before_y)) {
+                        continue;
+                    }
+                    else {
+                        if (!((nowX == startpoint[0] && nowY == startpoint[1])//排除起終點
+                            || (nowX == endpoint[0] && nowY == endpoint[1]))) {
+                            //著色
+                            drow_route.push({
+                                "nowX": nowX,
+                                "nowY": nowY,
+                                "nowFX": nowFX,
+                                "nowFY": nowFY
+                            });
+                            step++;
+                        }
+                        before_x = dt_close[i].FatherX;
+                        before_y = dt_close[i].FatherY;
+                    }
+                }
+            }
+
+            //倒排序=正常出發順序
+            drow_route.reverse();
+            timer_goroute = window.setInterval(goroute, 150);
+        }
+        
+        /**走一步 */
+        function goroute() {
+            //如果路由表被清空就終止timer
+            if (drow_route.length == 0) {
+                clearInterval(timer_goroute);
+                return false;
+            }
+
+            //清除上一個點的路徑色
+            if ($('#td_' + drow_route[0].nowFX + '_' + drow_route[0].nowFY).attr('class') == 'back_routes' ||
+                $('#td_' + drow_route[0].nowFX + '_' + drow_route[0].nowFY).attr('class') == 'back_start') {
+                $('#td_' + drow_route[0].nowFX + '_' + drow_route[0].nowFY).attr('class', '');
+                $('#td_' + drow_route[0].nowFX + '_' + drow_route[0].nowFY).text('');
+            }
+
+            //著色路由表的第1筆
+            $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).attr('class', 'back_routes');
+            //判斷來向
+            if (drow_route[0].nowFX == drow_route[0].nowX - 1 && drow_route[0].nowFY == drow_route[0].nowY - 1) {//左上
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('↘');
+            }
+            else if (drow_route[0].nowFX == drow_route[0].nowX - 1 && drow_route[0].nowFY == drow_route[0].nowY) {//正上
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('↓');
+            }
+            else if (drow_route[0].nowFX == drow_route[0].nowX - 1 && drow_route[0].nowFY == drow_route[0].nowY + 1) {//右上
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('↙');
+            }
+            else if (drow_route[0].nowFX == drow_route[0].nowX && drow_route[0].nowFY == drow_route[0].nowY - 1) {//左邊
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('→');
+            }
+            else if (drow_route[0].nowFX == drow_route[0].nowX && drow_route[0].nowFY == drow_route[0].nowY + 1) {//右邊
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('←');
+            }
+            else if (drow_route[0].nowFX == drow_route[0].nowX + 1 && drow_route[0].nowFY == drow_route[0].nowY - 1) {//左下
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('↗');
+            }
+            else if (drow_route[0].nowFX == drow_route[0].nowX + 1 && drow_route[0].nowFY == drow_route[0].nowY) {//正下
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('↑');
+            }
+            else if (drow_route[0].nowFX == drow_route[0].nowX + 1 && drow_route[0].nowFY == drow_route[0].nowY + 1) {//右下
+                $('#td_' + drow_route[0].nowX + '_' + drow_route[0].nowY).text('↖');
+            }
+
+            //移除第一筆
+            drow_route.shift();
+        }
+    </script>
+</head>
+<body>
+    <table id="gv" style="border: 3px #cccccc solid; width: 80%; height: 600px;" border='1'>
+    </table>
+
+</body>
+</html>

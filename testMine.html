@@ -1,0 +1,348 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="shortcut icon" href="http://www.google.com/favicon.ico" />
+    <meta charset="utf-8" />
+    <title>實驗踩地雷</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <link rel="stylesheet" href="w3.css">
+    <style>
+        td {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #ccc;
+            text-align: center;
+            vertical-align: central;
+            padding: 0;
+            margin: 0;
+        }
+
+        .btns {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            margin-top: 0px;
+            text-align: center;
+            vertical-align: central;
+            font-size: 20px;
+        }
+
+        .btns_disabled {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+            margin-top: 0px;
+            text-align: center;
+            vertical-align: central;
+            background-color: #a4a4a4;
+            color: #2553d3;
+            font-size: 20px;
+        }
+    </style>
+
+    <script>
+        //建立反射地圖;
+        var map = [];
+        //建立隨機地圖
+        var mines = [];
+        var playing = true;
+        var flagcounts = 0;
+        var isfirststep = true;//已經踩下第一步?
+
+        $(function () {
+            initMap();
+            createMines();
+            //testShow();
+        });
+
+        /**建立基礎地圖 */
+        function initMap() {
+            map = [];
+            for (var i = 0; i < 16; i++) {
+                var insert_html = '<tr id="tr_' + i + '">●</tr>';
+                var insert_td = '';
+                var temp = [];
+                for (var j = 0; j < 30; j++) {
+                    insert_td += '<td id="td_' + i + '_' + j + '" class="">\
+<input type="button" id="btn_' + i + '_' + j + '" onclick="clickBtn(this.id)" class="btns" value=" " \
+oncontextmenu="event.preventDefault();" onmousedown="clickBtnFlag(event,this.id)"/></td>';
+
+                    temp.push(0);
+                }
+                map.push(temp);
+                insert_html = insert_html.replace(/●/g, insert_td);
+                $('#tb').append(insert_html);
+            }
+        }
+
+        /**作弊全秀 */
+        function testShow() {
+            //地圖
+            for (var i = 0; i < 16; i++) {
+                for (var j = 0; j < 30; j++) {
+                    if (map[i][j] == 1) {
+                        $('#btn_' + i + '_' + j).val('💣');
+                    }
+                }
+            }
+        }
+
+        /**產生隨機地雷 */
+        function createMines() {
+            mines = [];
+            for (var i = 0; i < 99; i++) {
+                var ranX = Math.floor(Math.random() * 16);
+                var ranY = Math.floor(Math.random() * 30);
+                var temp = [ranX, ranY];
+                var isrepeat = false;
+                //檢查不重複
+                for (var j = 0; j < mines.length; j++) {
+                    if (mines[j][0] == temp[0] && mines[j][1] == temp[1]) {
+                        i--;
+                        isrepeat = true;
+                        break;
+                    }
+                }
+                if (isrepeat == true) {
+                    continue;
+                }
+                else {
+                    mines.push(temp);
+                }
+
+            }
+
+            //設置地雷
+            for (var i = 0; i < 99; i++) {
+                map[mines[i][0]][mines[i][1]] = 1;
+            }
+        }
+
+        /**
+         * 踩下
+         * @param id
+         */
+        function clickBtn(id) {
+            if (playing == false) {
+                return;
+            }
+
+            //立旗不可點
+            if ($('#' + id).val() == '⚑') {
+                return;
+            }
+            else if ($('#' + id).attr('class') == 'btns_disabled') {
+                return;
+            }
+
+
+            $('#' + id).attr('class', 'btns_disabled');//只准踩一次
+            //拆分座標
+            var pointX = parseInt(id.split('_')[1]);
+            var pointY = parseInt(id.split('_')[2]);
+            //檢查是否中獎
+            var isboom = false;
+            for (var i = 0; i < mines.length; i++) {
+                if (mines[i][0] == pointX && mines[i][1] == pointY) {
+                    //如果第一步就炸,把炸彈搬走
+                    if (isfirststep == true) {
+                        while (true) {
+                            var ranX = Math.floor(Math.random() * 16);
+                            var ranY = Math.floor(Math.random() * 30);
+                            var temp = [ranX, ranY];
+                            var isrepeat = false;
+                            //檢查不重複
+                            if (temp[0] == pointX && temp[1] == pointY) {
+                                isrepeat = true;
+                            }
+                            else {
+                                for (var k = 0; k < mines.length; k++) {
+                                    if (mines[k][0] == temp[0] && mines[k][1] == temp[1]) {
+                                        isrepeat = true;
+                                        break;
+                                    }
+                                }
+                            }                            
+                            if (isrepeat == true) {
+                                continue;//重複就重產生地雷(和已有的地雷清單)
+                            }
+                            else {
+                                mines[i] = temp;
+                                map[pointX][pointY] = 0;//清除原本地雷
+                                map[temp[0]][temp[1]] = 1;//放新地雷
+                                break;
+                            }
+                        }
+                        if (isfirststep == true) {
+                            isfirststep = false;
+                        }
+                        break;
+                    }
+                    else {
+                        playing = false;
+                        isboom = true;
+                        $('#' + id).attr('style', 'color:red;');
+                        $('#' + id).val('💣');
+                        testShow();
+                        alert('你掛惹');
+                        if ($('#ckb_ggrestart').prop('checked') == true) {
+                            location.reload();
+                        }
+                    }
+                    
+                }
+            }
+
+            if (isfirststep == true) {
+                isfirststep = false;
+            }
+
+            //沒中，檢查父近8格炸彈數
+            if (isboom == false) {
+                var boomcounts = 0;
+                var selectpoints = [];
+                selectpoints.push([pointX - 1, pointY - 1]);
+                selectpoints.push([pointX - 1, pointY]);
+                selectpoints.push([pointX - 1, pointY + 1]);
+                selectpoints.push([pointX, pointY - 1]);
+                selectpoints.push([pointX, pointY + 1]);
+                selectpoints.push([pointX + 1, pointY - 1]);
+                selectpoints.push([pointX + 1, pointY]);
+                selectpoints.push([pointX + 1, pointY + 1]);
+                //排除邊界
+                for (var j = selectpoints.length - 1; j >= 0; j--) {
+                    if (selectpoints[j][0] <= -1 || selectpoints[j][1] <= -1
+                        || selectpoints[j][0] >= 16 || selectpoints[j][1] >= 30) {
+                        selectpoints.splice(j, 1);
+                        continue;
+                    }
+                    else {
+                        //console.log(selectpoints[j][0] + ',' + selectpoints[j][1]);
+                        if (map[selectpoints[j][0]][selectpoints[j][1]] == 1) {
+                            boomcounts++;
+                            selectpoints.splice(j, 1);
+                        }
+                    }
+                }
+                if (boomcounts > 0) {
+                    //提示周圍炸彈數
+                    $('#' + id).val(boomcounts);
+                }
+                else {//自動踩雷
+                    for (var j = selectpoints.length - 1; j >= 0; j--) {
+                        $('#btn_' + selectpoints[j][0] + '_' + selectpoints[j][1]).click();
+                    }
+                }
+            }
+        }
+
+        /**
+         * 滑鼠右鍵放旗
+         * @param e
+         */
+        function clickBtnFlag(e, id) {
+            if (playing == false) {
+                return;
+            }
+            //只篩選右鍵
+            if (e.button == 2) {
+
+                if ($('#' + id).val() == "⚑") {
+                    $('#' + id).val(' ');
+                    $('#' + id).removeAttr('style');
+                    flagcounts--;
+                }
+                else if ($('#' + id).attr('class') == 'btns') {
+                    $('#' + id).val('⚑');
+                    $('#' + id).attr('style', 'color:#c46f07;');
+                    flagcounts++;
+                }
+                $('#lb_flags').text(flagcounts);
+                var progess = parseInt(flagcounts / 99 * 100);
+                $('#progess').text(progess + '%');
+                $('#progess').attr('style', 'height:20px;text-align:center;width:' + progess + '%;');
+
+                //檢查全部放旗
+                if (flagcounts == 99) {
+                    var flagOK = 0;//放對旗的部分
+                    for (var i = 0; i < mines.length; i++) {
+                        if ($('#btn_' + mines[i][0] + '_' + mines[i][1]).val() == "⚑") {
+                            flagOK++;
+                        }
+                    }
+
+                    if (flagOK == 99) {
+                        playing = false;
+                        alert('恭喜過關！');
+                    }
+                }
+            }
+            else if (e.button == 1) {//中間鍵批次點選
+                //先取得點選格的數字
+                if ($('#' + id).val().trim() == ''
+                    || $('#' + id).val() == '⚑') {
+                    return;
+                }
+                if ($('#' + id).attr('class') != 'btns_disabled') {
+                    return;
+                }
+                //拆分座標
+                var pointX = parseInt(id.split('_')[1]);
+                var pointY = parseInt(id.split('_')[2]);
+                var minecount = parseInt($('#' + id).val());
+                //檢查附近的插旗數為此格地雷統計
+                var selectpoints = [];
+                selectpoints.push([pointX - 1, pointY - 1]);
+                selectpoints.push([pointX - 1, pointY]);
+                selectpoints.push([pointX - 1, pointY + 1]);
+                selectpoints.push([pointX, pointY - 1]);
+                selectpoints.push([pointX, pointY + 1]);
+                selectpoints.push([pointX + 1, pointY - 1]);
+                selectpoints.push([pointX + 1, pointY]);
+                selectpoints.push([pointX + 1, pointY + 1]);
+                //排除邊界
+                var flagtestcount = 0;
+                for (var j = selectpoints.length - 1; j >= 0; j--) {
+                    if (selectpoints[j][0] <= -1 || selectpoints[j][1] <= -1
+                        || selectpoints[j][0] >= 16 || selectpoints[j][1] >= 30) {
+                        selectpoints.splice(j, 1);
+                        continue;
+                    }
+                    else {//掃描附近標記數
+                        if ($('#btn_' + selectpoints[j][0] + '_' + selectpoints[j][1]).val() == '⚑') {
+                            flagtestcount++;
+                            selectpoints.splice(j, 1);
+                        }
+                    }
+                }
+                if (flagtestcount == minecount) {
+                    //自動踩雷
+                    for (var j = selectpoints.length - 1; j >= 0; j--) {
+                        $('#btn_' + selectpoints[j][0] + '_' + selectpoints[j][1]).click();
+                    }
+                }
+            }
+        }
+    </script>
+
+</head>
+<body>
+    <div align="center">
+        <table id="tb" style="border: 3px #cccccc solid;width: 90%;height: 90%;" border='1' align="center"
+               oncontextmenu="event.preventDefault();">
+        </table>
+    </div>
+    <div align="center">
+        <input type="button" value="重玩" onclick="location.reload()" />
+        爆掉重來：<input type="checkbox" id="ckb_ggrestart" checked="checked" />
+        <br />
+        標記：<span id="lb_flags">0</span>/99　
+        <div class="w3-border" style="width:85%" align="left">
+            <div class="w3-container w3-blue"  id="progess" style="height:20px;text-align:center;width:00%;">0%</div>
+        </div>
+    </div>
+    
+</body>
+</html>

@@ -1,0 +1,65 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>解决onkeydown卡顿问题</title>
+    <style>
+     #div1{
+     	height: 100px;
+     	width: 100px;
+     	background-color: red;
+     	position: absolute;
+     	left: 0;
+     	top: 0;
+     }
+    </style>
+    <script type="text/javascript">
+      window.onload=function(){
+      	var oDiv=document.getElementById("div1");
+      	var direction={left:false,top:false,right:false,bottom:false};//左上右下 
+      	var timer=null;
+ 
+      	setInterval(function(){
+      		if(direction.left){
+      			oDiv.style.left=oDiv.offsetLeft-10+'px';
+	      	}
+	      	else if(direction.top){
+	      			oDiv.style.top=oDiv.offsetTop-10+'px';
+	      	}
+	      	else if(direction.right){
+	      			oDiv.style.left=oDiv.offsetLeft+10+'px';
+	      	}
+	      	else if(direction.bottom){
+	      			oDiv.style.top=oDiv.offsetTop+10+'px';
+	      	}
+      	},50);
+ 
+      	document.onkeydown=function(ev){
+      		var e=ev || event;
+ 
+      		switch(e.keyCode){
+      			case 37:
+      			 direction.left=true;
+      			break;
+      			case 38:
+      			 direction.top=true;
+      			break;
+      			case 39:
+      			 direction.right=true;
+      			break;
+      			case 40:
+      			 direction.bottom=true;
+      			break;
+      		}
+      	   
+      	}
+      	document.onkeyup=function(){
+      		direction={left:false,top:false,right:false,bottom:false};
+      	}
+      }
+    </script>
+</head>
+<body>
+	<div id="div1"></div>
+</body>
+</html>

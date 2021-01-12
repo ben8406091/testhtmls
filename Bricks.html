@@ -1,0 +1,217 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>打磚塊</title>
+    <style>
+        * {
+            padding: 0;
+            margin: 0;
+        }
+
+        canvas {
+            background: #eee;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- 場景 -->
+    <br />
+    <br />
+    <canvas id="myCanvas" width="480" height="320"></canvas>
+    <br />
+    <div align="center">
+        <input type="button" value="重來" onclick="location.reload();" />
+    </div>
+
+    <script>
+        //●●●●●●●●參數集
+        //畫布參數
+        var canvas = document.getElementById("myCanvas");//取得畫布
+        var ctx = canvas.getContext("2d");//取得2D版本畫布
+
+        //球參數
+        var ballRadius = 10;//半徑
+        //球起始座標
+        var x = canvas.width / 2;
+        var y = canvas.height - 30;
+        //球的初始加速度
+        var dx = 2;
+        var dy = -2;
+
+        //擋板屬性
+        var paddleHeight = 10;//檔板高
+        var paddleWidth = 75;//檔板寬
+        var paddleX = (canvas.width - paddleWidth) / 2;//檔板起始位置
+
+        //鍵盤讀取方向鍵
+        var rightPressed = false;//按下右
+        var leftPressed = false;//按下左
+
+        //磚塊屬性
+        var brickRowCount = 3;//共幾列
+        var brickColumnCount = 5;//共幾行
+        var brickWidth = 75;//磚塊寬
+        var brickHeight = 20;//磚塊高
+        var brickPadding = 10;//磚塊間隔
+        var brickOffsetTop = 30;//距上邊界
+        var brickOffsetLeft = 30;//距左邊界
+
+        //刷新頻率=每10毫秒一次
+        var updatetimer = setInterval(Update, 10);
+
+        //分數
+        var score = 0;
+        //*************************************************\\
+
+        //產生磚塊類別和物件群組
+        var bricks = [];
+        for (c = 0; c < brickColumnCount; c++) {//多少行
+            bricks[c] = [];
+            for (r = 0; r < brickRowCount; r++) {//多少列
+                bricks[c][r] = { x: 0, y: 0, status: 1 };//每一個磚塊的屬性
+            }
+        }
+
+        //頁面刷新幀
+        function Update() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);//清理畫面
+            drawBricks();//刷新磚塊
+            drawBall();//刷新球
+            drawPaddle();//刷新擋板
+            collisionDetection();//碰撞偵測
+            drawScore();//刷新分數
+
+            //邊界碰撞設定
+            //左右邊界
+            if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+                dx = -dx;
+            }
+            //上邊界
+            if (y + dy < ballRadius) {
+                dy = -dy;
+            }
+            //下邊界
+            else if (y + dy > canvas.height - ballRadius) {//如果碰到地板了
+                if (x > paddleX && x < paddleX + paddleWidth) {//如果剛好落在檔板遮擋範圍內(球X在檔板的X~檔板寬間)
+                    y = y - paddleHeight//修正球的高度在檔板上方
+                    dy = -dy;
+                    
+                }
+                else {
+                    alert("GAME OVER");//輸了
+                    clearInterval(updatetimer);//關掉計時器
+                }
+            }
+
+            if (rightPressed && paddleX < canvas.width - paddleWidth) {//按往右,並且檔板X未超界
+                paddleX += 7;
+            }
+            else if (leftPressed && paddleX > 0) {//按往左,並且檔板X未超界
+                paddleX -= 7;
+            }
+
+            //更新球的下一次加速度方向
+            x += dx;
+            y += dy;
+        }
+
+        //註冊按鍵偵聽事件
+        document.addEventListener("keydown", keyDownHandler, false);
+        document.addEventListener("keyup", keyUpHandler, false);
+        document.addEventListener("mousemove", mouseMoveHandler, false);//滑鼠操控
+
+        //按鍵按下時判斷
+        function keyDownHandler(e) {
+            if (e.keyCode == 39) {
+                rightPressed = true;
+            }
+            else if (e.keyCode == 37) {
+                leftPressed = true;
+            }
+        }
+        //按鍵釋放時判斷
+        function keyUpHandler(e) {
+            if (e.keyCode == 39) {
+                rightPressed = false;
+            }
+            else if (e.keyCode == 37) {
+                leftPressed = false;
+            }
+        }
+        function mouseMoveHandler(e) {
+            var relativeX = e.clientX - canvas.offsetLeft;
+            if(relativeX > 0 && relativeX < canvas.width) {
+                paddleX = relativeX - paddleWidth/2;
+            }
+        }
+
+        //球的重繪
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = "#0095DD";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        //擋板重繪
+        function drawPaddle() {
+            ctx.beginPath();
+            ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+            ctx.fillStyle = "#9995DD";
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        //磚塊繪製
+        function drawBricks() {
+            for (c = 0; c < brickColumnCount; c++) {
+                for (r = 0; r < brickRowCount; r++) {
+                    if(bricks[c][r].status == 1) {//只有在這個磚塊的狀態=1時才畫他
+                        var brickX = (c*(brickWidth+brickPadding))+brickOffsetLeft;
+                        var brickY = (r*(brickHeight+brickPadding))+brickOffsetTop;
+                        bricks[c][r].x = brickX;
+                        bricks[c][r].y = brickY;
+                        ctx.beginPath();
+                        ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                        ctx.fillStyle = "#0095DD";
+                        ctx.fill();
+                        ctx.closePath();
+                    }
+                }
+            }
+        }
+
+        //磚塊碰撞偵測
+        function collisionDetection() {
+            for (c = 0; c < brickColumnCount; c++) {
+                for (r = 0; r < brickRowCount; r++) {
+                    var b = bricks[c][r];//掃描磚塊物件
+                    if(b.status == 1) {
+                        if(x > b.x && x < b.x+brickWidth && y > b.y && y < b.y+brickHeight) {
+                            dy = -dy;
+                            b.status = 0;//被撞到時修改狀態
+                            score++;//加分
+                            if(score == brickRowCount*brickColumnCount) {
+                                alert("打完了！");
+                                clearInterval(updatetimer);//關掉計時器
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        //刷新記分板
+        function drawScore() {
+            ctx.font = "16px Arial";
+            ctx.fillStyle = "#0095DD";
+            ctx.fillText("Score: "+score, 8, 20);
+        }
+    </script>
+
+</body>
+</html>

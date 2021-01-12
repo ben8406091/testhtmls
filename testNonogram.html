@@ -1,0 +1,280 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>測試數織遊戲</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        /*基礎樣式*/
+        td {
+            width: 12px;
+            height: 12px;
+            border: 1px solid #ccc;
+            text-align: center;
+            vertical-align: central;
+            font-size: 16pt;
+        }
+
+        /*內容格的背景ˋ*/
+        .td_blank {
+            background: #cecece;
+            width: 12px;
+            height: 12px;
+        }
+        /*著色格*/
+        .td_drow {
+            background: #52d9d1;
+            width: 12px;
+            height: 12px;
+        }
+        /*提示格拿掉框線*/
+        .td_tip {
+            border: none;
+        }
+        /*頭列的提示格*/
+        .td_tip_col {
+            vertical-align: bottom;
+        }
+        /*頭行的提示格*/
+        .td_tip_row {
+            text-align: right;
+        }
+        /*答案正確提示色*/
+        .td_tip_ok {
+            color: #3cba83;
+        }
+    </style>
+
+    <script>
+        var ansermap = [];
+        var gamewidth = Math.floor(Math.random() * 6) + 5;//遊戲隨機寬度
+        var gameheight = Math.floor(Math.random() * 6) + 5;//遊戲隨機高度
+        var gamestart = false;
+
+        $(function () {
+            initMap();
+            setanser();
+            inittip();
+            gamestart = true;
+        });
+
+        /**生成遊戲地圖 */
+        function initMap() {
+            var appendhtml = '';
+            //先生成頭列
+            appendhtml += '<tr>';
+            for (var i = 0; i <= gamewidth; i++) {
+                appendhtml += '<td id="td_0_' + i + '" class="td_tip td_tip_col"></td>';
+            }
+            appendhtml += '</tr>';
+
+            //其他列
+            for (var i = 1; i <= gameheight; i++) {
+                appendhtml += '<tr>';
+                appendhtml += '<td id="td_' + i + '_0" class="td_tip td_tip_row"></td>';
+                for (var j = 1; j <= gamewidth; j++) {
+                    appendhtml += '<td id="td_' + i + '_' + j + '" class="td_blank" onclick="tdclick(this.id)"></td>';
+                }
+                appendhtml += '</tr>';
+            }
+
+            //塞到表格裡
+            $('#tb').append(appendhtml);
+        }
+
+        /**設定答案 */
+        function setanser() {
+            for (var i = 1; i <= gameheight; i++) {
+                var rowans = [];
+                for (var j = 1; j <= gamewidth; j++) {
+                    var rand = Math.random() * 3;
+                    if (rand <= 1.4) {
+                        rowans.push('●');
+                    }
+                    else {
+                        rowans.push('○');
+                    }
+                }
+                ansermap.push(rowans);
+            }
+
+            //*輸出答案
+            //for (var i = 0; i < ansermap.length; i++) {
+            //    console.log(ansermap[i]);
+            //}
+        }
+
+        /**設定提示 */
+        function inittip() {
+            //橫向提示
+            for (var i = 0; i < gameheight; i++) {
+                var rowtip = [];
+                rowtip.push(0);
+                for (var j = 0; j < gamewidth; j++) {
+                    if (ansermap[i][j] == '●') {
+                        rowtip[rowtip.length - 1]++;//如果該行讀取到一個答案則累計+1
+                    }
+                    else {
+                        rowtip.push(0);//否則結束這個計數,換下一個
+                    }
+                }
+
+                //輸出列提示
+                var tipstr = '';
+                for (var j = 0; j < rowtip.length; j++) {
+                    tipstr += (rowtip[j]).toString();
+                }
+                var temp = tipstr.replace(/0/g, '');
+                if (temp == '') {
+                    temp = '-';
+                }
+                $('#td_' + (i + 1) + '_' + 0).text(temp);
+            }
+
+
+            //縱向提示
+            for (var i = 0; i < gamewidth; i++) {
+                var coltip = [];
+                coltip.push(0);
+                for (var j = 0; j < gameheight; j++) {
+                    if (ansermap[j][i] == '●') {
+                        coltip[coltip.length - 1]++;//如果該列讀取到一個答案則累計+1
+                    }
+                    else {
+                        coltip.push(0);//否則結束這個計數,換下一個
+                    }
+                }
+
+                //輸出行提示
+                var tipstr = '';
+                for (var j = 0; j < coltip.length; j++) {
+                    tipstr += (coltip[j]).toString();
+                }
+                tipstr = tipstr.replace(/0/g, '');
+                //數字間換行
+                var tempcoltip = '';
+                for (var j = 0; j < tipstr.length; j++) {
+                    tempcoltip += tipstr.substr(j, 1) + "<br>";
+                }
+                if (tempcoltip == '') {
+                    tempcoltip = '-';
+                }
+                $('#td_0_' + (i + 1)).html(tempcoltip);
+            }
+
+            checkpass();//起始檢查
+        }
+
+        /**
+         * 點擊格子換色
+         * @param objid 格子ID
+         */
+        function tdclick(objid) {
+            if (gamestart == false) {
+                return false;
+            }
+
+            if ($('#' + objid).attr('class') == 'td_blank') {
+                $('#' + objid).attr('class', 'td_drow');
+            }
+            else {
+                $('#' + objid).attr('class', 'td_blank');
+            }
+
+            checkpass();
+        }
+
+        /**檢查答案是否正確 */
+        function checkpass() {
+            //所有座標與答案圖一致
+            var ansercount = 0;
+            for (var i = 0; i < gameheight; i++) {
+                var rowcount = 0;//順便檢查列完成
+                for (var j = 0; j < gamewidth; j++) {
+                    if ($('#td_' + (i + 1) + '_' + (j + 1)).attr('class') == 'td_blank'
+                        && ansermap[i][j] == '○') {
+                        ansercount++;
+                        rowcount++;
+                    }
+                    else if ($('#td_' + (i + 1) + '_' + (j + 1)).attr('class') == 'td_drow'
+                        && ansermap[i][j] == '●') {
+                        ansercount++;
+                        rowcount++;
+                    }
+                }
+
+                if (rowcount == gamewidth) {//該列完全正確
+                    $('#td_' + (i + 1) + '_0').attr('class', 'td_tip td_tip_row td_tip_ok');
+                }
+                else {
+                    $('#td_' + (i + 1) + '_0').attr('class', 'td_tip td_tip_row');
+                }
+            }
+
+            //檢查行完成
+            for (var i = 0; i < gamewidth; i++) {
+                var colcount = 0;
+                for (var j = 0; j < gameheight; j++) {
+                    if ($('#td_' + (j + 1) + '_' + (i + 1)).attr('class') == 'td_blank'
+                        && ansermap[j][i] == '○') {
+                        colcount++;
+                    }
+                    else if ($('#td_' + (j + 1) + '_' + (i + 1)).attr('class') == 'td_drow'
+                        && ansermap[j][i] == '●') {
+                        colcount++;
+                    }
+                }
+
+                if (colcount == gameheight) { // 該行完全正確
+                    $('#td_0_' + (i + 1)).attr('class', 'td_tip td_tip_col td_tip_ok');
+                }
+                else {
+                    $('#td_0_' + (i + 1)).attr('class', 'td_tip td_tip_col');
+                }
+            }
+
+            if (ansercount == (gameheight * gamewidth)) {
+                gamestart = false;
+                alert('過關了!');
+            }
+        }
+
+        /**清除所有著色 */
+        function cleardrow() {
+            if (gamestart == false) {
+                return false;
+            }
+
+            for (var i = 1; i <= gameheight; i++) {
+                for (var j = 1; j <= gamewidth; j++) {
+                    $('#td_' + i + '_' + j).attr('class', 'td_blank');
+                }
+            }
+
+            checkpass();
+        }
+    </script>
+</head>
+<body>
+    <div style="height:50%">
+        <table id="tb" style="width: 40%;height: 500px;" align="center">
+        </table>
+    </div>
+
+    <div style="height:50%">
+        <br />
+        <div align="center">
+            <input type="button" value="清除填寫" onclick="cleardrow();" style="font-size:25px;" />
+            <input type="button" value="重玩" onclick="location.reload();" style="font-size:25px;" />
+        </div>
+        <div style="margin-left:10%">
+            遊戲規則：根據行列的提示點擊格子著色<br />
+            如果行列包含「3」，則表示該行列至少包含「連續3個」要著色的格子，依此類推<br />
+            如果行列包含「11」，則表示該行列至少包含「2個格子，且中間至少須留1空格不連續」要著色的格子，依此類推<br />
+            如果行列顯示「-」，則表示該行列「沒有需要著色的格子」<br />
+            若著色情況符合該行列正確答案，提示數字會顯示綠色
+        </div>
+    </div>
+        
+</body>
+</html>

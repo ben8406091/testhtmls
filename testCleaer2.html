@@ -1,0 +1,936 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>測試消消樂</title>
+    <script src="jquery-3.4.0.min.js"></script>
+</head>
+<body id="body">
+    <div align="center">
+        <input type="button" value="重來" style="font-size:1.5rem" onclick="location.reload()" />
+    </div>
+    <div align="center">
+        <canvas id="t1" width="900" height="950" style="border:0px;display: inline-block;margin-top:17px;touch-action: none;height:95%;margin-left:15%"></canvas>
+    </div>
+
+    <script>
+        var canvas = document.getElementById('t1');
+        var ctx = canvas.getContext('2d');
+
+        //顏色及基礎設定
+        var bg = [];//背景
+        var bgc = [];//背景色
+        var bgc_wall = 'rgba(0,0,0,1)';//牆壁顏色
+        var bgc_space = 'rgba(210,210,210,1)';//背景顏色
+        var bgc_free = 'rgba(132,193,255,0)';//自由區背景(預設)
+        var w = 50;//每格寬高
+        var score = 0;//分數
+        var maxscore = 0;//歷史最高分數
+        var gamestart = true;
+        var windowdir = 'H';//視窗方向{H=橫向/V=直向}
+        var fg = [];//自由區
+        var fgc = [];//自由區顏色
+        var fg_X = 0;//自由區對齊點_X座標
+        var fg_Y = 0;//自由區對齊點_Y座標
+
+        //方塊設定
+        var bricks = [];
+        var bricks_colors = [];
+
+        //滑鼠參數
+        var offsetX, offsetY;
+        var startX, startY;
+        var mouseX;
+        var mouseY;
+        var isDragging = false;//拖曳中
+        var select_index = -1;//被拖曳的自由區方塊組
+        //拖曳方塊
+        var dragbrick = [];
+        var emptycolor = 'rgba(255,255,255,0)';//隱形的拖曳中背景色
+        var target_preput_color = 'rgba(0,0,0,0.3)';//準備放下前的染色
+        var dragbrick_color = [];
+        var testgroup = [];//檢查不可放使用
+        //註冊滑鼠事件
+        canvas.onmousedown = handleMouseDown;
+        canvas.onmousemove = handleMouseMove;
+        canvas.onmouseup = handleMouseUp;
+        canvas.onmouseout = handleMouseOut;//超出canvas範圍的取消事件
+
+        //預放範圍(貼齊)
+        var target_bricks = [];
+        var target_bricks_color = [];
+
+        //文字設定
+        var scoretxt_font = '30px Arial';//分數文字設定
+        var scoretxt_fontsize = 30;//文字大小
+        var scoretxt_font_MAX = '30px Arial';//分數文字設定(最大)
+        var scoretxt_fontsize_MAX = 30;//文字大小(最大)
+        var timer_score_ani;//計時器ID_分數縮放大小
+        var timer_clearing_ani;//計時器ID_消除中動畫
+        var timer_clearing_bool = false;//控制消除動畫的開關
+
+        $(function () {
+            if (window.outerWidth > window.outerHeight) {
+                windowdir = 'H';//橫版
+                $('#body').attr('style', 'zoom:1;');
+            }
+            else {
+                windowdir = 'V';//直版
+                $('#body').attr('style', 'zoom:1.4;');
+            }
+
+            initMap();//基礎地圖
+            initPrefabs();//方塊預製
+            //放置方塊
+            for (var i = 0; i < 3; i++) {
+                setbrick(i);
+            }
+
+            //取得歷史最高分
+            if (localStorage.getItem('maxscore') != null) {
+                maxscore = parseInt(localStorage.getItem('maxscore'));
+            }
+            else {
+                localStorage.setItem('maxscore', maxscore);
+            }
+
+            paint();
+
+            //註冊手指事件(手機)
+            var mouseEventTypes = {
+                touchstart: "mousedown",
+                touchmove: "mousemove",
+                touchend: "mouseup"
+            };
+
+            for (originalType in mouseEventTypes) {
+                document.addEventListener(originalType, function (originalEvent) {
+                    event = document.createEvent("MouseEvents");//註冊JS滑鼠事件集合
+                    touch = originalEvent.changedTouches[0];//有幾隻手指放在螢幕上?第[0]號=一根手指
+                    event.initMouseEvent(mouseEventTypes[originalEvent.type], true, true,
+                        window, 0, touch.screenX, touch.screenY, touch.clientX,
+                        touch.clientY, touch.ctrlKey, touch.altKey, touch.shiftKey,
+                        touch.metaKey, 0, null);//補齊觸控事件缺乏滑鼠事件的參數
+                    originalEvent.target.dispatchEvent(event);
+                });
+            }
+        });
+
+        /**建立基礎地圖 */
+        function initMap() {
+            /*牆兩層厚、放置區10*10、自由區以3塊4*4組成
+             *牆壁=20/空閒=0/方塊=1/自由區=0
+             牆牆牆.... 14 ....牆牆
+             牆牆牆.... 14 ....牆牆
+             牆牆放放..10..放放牆牆
+             牆牆放放..10..放放牆牆
+             ... x 10
+             牆牆牆.... 14 ....牆牆
+             牆牆牆.... 14 ....牆牆
+             */
+
+            bg = [];
+            bgc = [];
+            //上面
+            bg.push([20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]);
+            bg.push([20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]);
+            bgc.push([bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall,
+                bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall]);
+            bgc.push([bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall,
+                bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall]);
+            //中間
+            for (var i = 0; i < 10; i++) {
+                bg.push([20, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 20]);
+                bgc.push([bgc_wall, bgc_wall, bgc_space, bgc_space, bgc_space, bgc_space, bgc_space,
+                    bgc_space, bgc_space, bgc_space, bgc_space, bgc_space, bgc_wall, bgc_wall]);
+            }
+            //下面
+            bg.push([20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]);
+            bg.push([20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]);
+            bgc.push([bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall,
+                bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall]);
+            bgc.push([bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall,
+                bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall, bgc_wall]);
+
+            //新拼接自由區 = 3塊 4*4方塊
+            for (var i = 0; i < 3; i++) {
+                fg.push([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]);
+                fgc.push([[bgc_free, bgc_free, bgc_free, bgc_free], [bgc_free, bgc_free, bgc_free, bgc_free],
+                [bgc_free, bgc_free, bgc_free, bgc_free], [bgc_free, bgc_free, bgc_free, bgc_free]]);
+            }
+
+
+            //拖曳方塊及預放範圍初始化
+            for (var i = 0; i < 4; i++) {
+                dragbrick.push([-1, -1, -1, -1]);
+                target_bricks.push([-1, -1, -1, -1]);
+                testgroup.push([0, 0, 0, 0]);
+                dragbrick_color.push([emptycolor, emptycolor, emptycolor, emptycolor]);
+                target_bricks_color.push([emptycolor, emptycolor, emptycolor, emptycolor]);
+            }
+        }
+
+        /**初始化預製方塊 */
+        function initPrefabs() {
+            //定義方塊
+            //I型
+            /*   ｏｏｏｏ　ｏｏ●ｏ　ｏｏｏｏ　ｏｏ●ｏ
+             * 　ｏｏｏｏ　ｏｏ●ｏ　ｏｏｏｏ　ｏｏ●ｏ
+             * 　●●●●　ｏｏ●ｏ　●●●●　ｏｏ●ｏ
+             * 　ｏｏｏｏ　ｏｏ●ｏ　ｏｏｏｏ　ｏｏ●ｏ
+             **/
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]]);
+            bricks_colors.push('rgba(191,88,20,1)');
+            //J型
+            /*   ｏｏｏｏ　ｏｏｏｏ ｏｏｏｏ　ｏｏｏｏ
+             * 　ｏｏ●ｏ　ｏｏｏｏ ｏｏ●●　ｏ●ｏｏ
+             * 　ｏｏ●ｏ　●●●ｏ ｏｏ●ｏ　ｏ●●●
+             * 　ｏ●●ｏ　ｏｏ●ｏ ｏｏ●ｏ  ｏｏｏｏ
+             **/
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 1, 0], [0, 1, 1, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 0], [0, 0, 1, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 1], [0, 0, 1, 0], [0, 0, 1, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 1, 1], [0, 0, 0, 0]]);
+            bricks_colors.push('rgba(70,130,180,1)');
+            //L型
+            /*   ｏ●ｏｏ　ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ
+             * 　ｏ●ｏｏ　ｏｏｏｏ  ｏ●●ｏ　ｏｏ●ｏ
+             * 　ｏ●●ｏ　ｏ●●●  ｏｏ●ｏ　●●●ｏ
+             * 　ｏｏｏｏ　ｏ●ｏｏ  ｏｏ●ｏ  ｏｏｏｏ
+             **/
+            bricks.push([[0, 1, 0, 0], [0, 1, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [0, 1, 1, 1], [0, 1, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 1, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 0], [1, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks_colors.push('rgba(255,0,0,1)');
+            //O型
+            /*   ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ
+             * 　ｏ●●ｏ　ｏ●●ｏ  ｏ●●ｏ　ｏ●●ｏ
+             * 　ｏ●●ｏ　ｏ●●ｏ  ｏ●●ｏ　ｏ●●ｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            bricks.push([[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks_colors.push('rgba(0,128,0,1)');
+            //T型
+            /*   ｏｏ●ｏ　ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ
+             * 　ｏ●●ｏ　ｏ●●●  ｏ●ｏｏ　ｏｏ●ｏ
+             * 　ｏｏ●ｏ　ｏｏ●ｏ  ｏ●●ｏ　ｏ●●●
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏ●ｏｏ  ｏｏｏｏ
+             **/
+            bricks.push([[0, 0, 1, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 1, 1, 1], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 1, 0, 0], [0, 1, 1, 0], [0, 1, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 0], [0, 1, 1, 1], [0, 0, 0, 0]]);
+            bricks_colors.push('rgba(255,165,0,1)');
+            //S型
+            /*   ｏｏｏｏ　ｏ●ｏｏ　ｏｏｏｏ　ｏ●ｏｏ
+             * 　ｏｏ●●　ｏ●●ｏ  ｏｏ●●　ｏ●●ｏ
+             * 　ｏ●●ｏ　ｏｏ●ｏ  ｏ●●ｏ　ｏｏ●ｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 1], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 1], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks_colors.push('rgba(225,225,0,1)');
+            //Z型
+            /*   ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ　ｏｏｏｏ
+             * 　●●ｏｏ　ｏｏ●ｏ  ●●ｏｏ　ｏｏ●ｏ
+             * 　ｏ●●ｏ　ｏ●●ｏ  ｏ●●ｏ　ｏ●●ｏ
+             * 　ｏｏｏｏ　ｏ●ｏｏ  ｏｏｏｏ  ｏ●ｏｏ
+             **/
+            bricks.push([[0, 0, 0, 0], [1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 1, 0], [0, 1, 1, 0], [0, 1, 0, 0]]);
+            bricks_colors.push('rgba(95,158,160,1)');
+            //單格型
+            /*   ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             * 　ｏｏ●ｏ　ｏｏ●ｏ  ｏｏ●ｏ  ｏｏ●ｏ
+             * 　ｏｏｏｏ　ｏｏｏｏ  ｏｏｏｏ  ｏｏｏｏ
+             **/
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks.push([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 0]]);
+            bricks_colors.push('rgba(255,68,255,1)');
+        }
+
+        /**繪製 */
+        function paint() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);//清除
+
+            //畫背景
+            for (var i = 0; i < bg.length; i++) {
+                for (var j = 0; j < bg[i].length; j++) {
+                    ctx.beginPath();
+                    ctx.fillStyle = bgc[i][j];
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.rect(j * w, (i + 1) * w, w, w);
+                    ctx.fillRect(j * w, (i + 1) * w, w, w);
+                    ctx.stroke();
+                }
+            }
+
+            //畫自由區
+            for (var k = 0; k < fg.length; k++) {
+                for (var i = 0; i < fg[k].length; i++) {
+                    for (var j = 0; j < fg[k][i].length; j++) {
+                        if (windowdir == 'H') {//橫向排版
+                            ctx.beginPath();
+                            ctx.fillStyle = fgc[k][i][j];
+                            ctx.strokeStyle = '#FFFFFF';
+                            ctx.rect(j * w + (14 * w), (i + 2 + (k * 4)) * w, w, w);
+                            ctx.fillRect(j * w + (14 * w), (i + 2 + (k * 4)) * w, w, w);
+                            ctx.stroke();
+                        }
+                        else if (windowdir == 'V') {//縱向
+                            ctx.beginPath();
+                            ctx.fillStyle = fgc[k][i][j];
+                            ctx.strokeStyle = '#FFFFFF';
+                            ctx.rect((j + 1 + (k * 4)) * w, (i + 1) * w + (14 * w), w, w);
+                            ctx.fillRect((j + 1 + (k * 4)) * w, (i + 1) * w + (14 * w), w, w);
+                            ctx.stroke();
+                        }
+                    }
+                }
+            }
+
+            //繪製預放方塊
+            //換算滑鼠格(影子)
+            if (isDragging == true) {
+                var clickgrid_row = Math.floor(mouseY / w);
+                var clickgrid_col = Math.floor(mouseX / w);
+                //判斷在釋放區中
+                if (clickgrid_row >= 3 && clickgrid_row <= 12
+                    && clickgrid_col >= 2 && clickgrid_col <= 11) {
+                    //判斷可放才預染色
+                    var allin = true;
+                    for (var i = 0; i < 4; i++) {
+                        for (var j = 0; j < 4; j++) {
+                            if (target_bricks[i][j] + bg[i + clickgrid_row - 3][j + clickgrid_col - 2] == 21
+                                || target_bricks[i][j] + bg[i + clickgrid_row - 3][j + clickgrid_col - 2] == 2) {
+                                allin = false;
+                                break;
+                            }
+                        }
+                        if (allin == false) {
+                            break;
+                        }
+                    }
+
+                    if (allin == true) {
+                        for (var i = 0; i < 4; i++) {
+                            for (var j = 0; j < 4; j++) {
+                                ctx.beginPath();
+                                ctx.fillStyle = target_bricks_color[i][j];
+                                ctx.fillRect((clickgrid_col + j - 2) * w, (clickgrid_row + i - 2) * w, w, w);
+                                ctx.stroke();
+                            }
+                        }
+                    }
+                }
+
+                //畫被拖曳的方塊
+                for (var i = 0; i < 4; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        ctx.beginPath();
+                        ctx.fillStyle = dragbrick_color[i][j];
+                        ctx.strokeStyle = 'rgba(0,0,0,0)';
+                        ctx.rect(j * w + (mouseX - 2 * w), i * w + (mouseY - 2 * w), w, w);
+                        ctx.fillRect(j * w + (mouseX - 2 * w), i * w + (mouseY - 2 * w), w, w);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            //畫分數文字
+            ctx.font = '30px Arial';
+            ctx.fillStyle = 'black';
+            ctx.fillText("分數：", (7 * w) + 20, w - 15);
+            ctx.font = scoretxt_font;
+            ctx.fillText(score, (9 * w), w - 15);
+            //最高分
+            ctx.font = '30px Arial';
+            ctx.fillStyle = 'black';
+            ctx.fillText("最高：", 0, w - 15);
+            ctx.font = scoretxt_font_MAX;
+            ctx.fillText(maxscore, (2 * w) - 10, w - 15);
+
+
+            //遊戲結束時
+            if (gamestart == false) {
+
+                //ctx.font = '60px Arial bold';
+                ctx.font = (scoretxt_fontsize * 1.25) + 'px Arial bold';
+                ctx.fillStyle = 'black';
+                ctx.fillText("ＧＡＭＥ ＯＶＥＲ！", (3 * w), (w * 8) - 10);
+            }
+        }
+
+        /**
+         * 設定方塊
+         * @param index 位置{0/1/2}
+         */
+        function setbrick(index) {
+            var randbrick_index = Math.floor(Math.random() * bricks.length);//隨機生成方塊
+            var randbrick_color_index = Math.floor(randbrick_index / 4);//方塊顏色
+            var rbrick = bricks[randbrick_index];
+            var rbrick_color = bricks_colors[randbrick_color_index];
+
+            //初始化指定的自由區
+            for (var i = 0; i < 4; i++) {
+                for (var j = 0; j < 4; j++) {
+                    fg[index][i][j] = 0;
+                    fgc[index][i][j] = bgc_free;
+                }
+            }
+
+
+            //放到位置上
+            for (var i = 0; i < 4; i++) {
+                for (var j = 0; j < 4; j++) {
+                    fg[index][i][j] = rbrick[i][j];
+                    if (fg[index][i][j] == 1) {
+                        fgc[index][i][j] = rbrick_color;
+                    }
+                }
+            }
+        }
+
+        /**
+         * 設定顏色的不透明度
+         * @param color_rgba
+         * @param new_opacity
+         */
+        function resetcolorOpacity(color_rgba, new_opacity) {
+            //先將顏色分組
+            var colors = color_rgba.replace('rgba(', '').replace(')', '').split(',');
+            //組合成新的顏色
+            var newcolorstr = 'rgba(';
+            newcolorstr += colors[0] + ',' + colors[1] + ',' + colors[2] + ',';
+            newcolorstr += new_opacity + ')';
+            return newcolorstr;
+        }
+
+        /**
+         * 滑鼠按下
+         */
+        function handleMouseDown(e) {
+            //取消預設事件
+            e.preventDefault();
+            e.stopPropagation();
+            if (gamestart == false) { return false; }
+
+            //點下座標
+            startX = parseInt(e.clientX - offsetX);
+            startY = parseInt(e.clientY - offsetY);
+            mouseX = parseInt(e.clientX - offsetX);
+            mouseY = parseInt(e.clientY - offsetY);
+
+            //點擊的格子
+            var clickgrid_row = Math.floor(startY / w);
+            var clickgrid_col = Math.floor(startX / w);
+
+            //1.判斷滑鼠點下的位置在自由區的渲染範圍
+            if (windowdir == 'H') {//橫向
+                if (clickgrid_col >= 14 && clickgrid_col <= 17
+                    && clickgrid_row >= 2 && clickgrid_row <= 13) {
+                    //2.換算點擊位置=哪塊自由區
+                    /* 第一塊：row = 2~5
+                     * 第二塊：row = 6~9
+                     * 第三塊：row = 10~13
+                     * col 固定14~17,要對應到0~3,所以-14
+                     * row要對到0~3,要-(4*k)-2
+                     **/
+                    select_index = -1;
+                    if (clickgrid_row >= 2 && clickgrid_row <= 5) {
+                        select_index = 0;
+                    }
+                    else if (clickgrid_row >= 6 && clickgrid_row <= 9) {
+                        select_index = 1;
+                    }
+                    else if (clickgrid_row >= 10 && clickgrid_row <= 13) {
+                        select_index = 2;
+                    }
+
+                    //3.判斷點下的格子有顏色
+                    if (select_index != -1) {
+                        if (fgc[select_index][clickgrid_row - (4 * select_index) - 2][clickgrid_col - 14] != bgc_free) {
+                            //4.複製方塊到拖曳區                            
+                            for (var i = 0; i < 4; i++) {
+                                for (var j = 0; j < 4; j++) {
+                                    dragbrick[i][j] = fg[select_index][i][j];//複製方塊
+                                    if (fgc[select_index][i][j] != bgc_free) {//複製顏色改半透明
+                                        dragbrick_color[i][j] = resetcolorOpacity(fgc[select_index][i][j], '0.9');
+                                        fgc[select_index][i][j] = bgc_free;//被拿走的暫時隱形
+                                    }
+                                }
+                            }
+
+                            //開始拖曳
+                            isDragging = true;
+                            paint();                            
+                        }
+                    }
+                }
+            }
+            else {//縱向
+                if (clickgrid_col >= 1 && clickgrid_col <= 12
+                    && clickgrid_row >= 15 && clickgrid_row <= 18) {
+                    //2.換算點擊位置=哪塊自由區
+                    /* 第一塊：col = 1~4
+                     * 第二塊：col = 5~8
+                     * 第三塊：col = 9~12
+                     * row 固定15~18,要對應到0~3,所以-15
+                     * col要對到0~3,要-(4*k)-1
+                     **/
+                    select_index = -1;
+                    if (clickgrid_col >= 1 && clickgrid_col <= 4) {
+                        select_index = 0;
+                    }
+                    else if (clickgrid_col >= 5 && clickgrid_col <= 8) {
+                        select_index = 1;
+                    }
+                    else if (clickgrid_col >= 9 && clickgrid_col <= 12) {
+                        select_index = 2;
+                    }
+
+                    //3.判斷點下的格子有顏色
+                    if (select_index != -1) {
+                        if (fgc[select_index][clickgrid_row - 15][clickgrid_col - (4 * select_index) - 1] != bgc_free) {
+                            //4.複製方塊到拖曳區
+                            for (var i = 0; i < 4; i++) {
+                                for (var j = 0; j < 4; j++) {
+                                    dragbrick[i][j] = fg[select_index][i][j];//複製方塊
+                                    if (fgc[select_index][i][j] != bgc_free) {//複製顏色改半透明
+                                        dragbrick_color[i][j] = resetcolorOpacity(fgc[select_index][i][j], '0.9');
+                                        fgc[select_index][i][j] = bgc_free;//被拿走的暫時隱形
+                                    }
+                                }
+                            }
+
+                            //開始拖曳
+                            isDragging = true;
+                            paint();                           
+                        }
+                    }
+                }
+            }
+
+        }
+
+        /**
+         * 滑鼠移動
+         */
+        function handleMouseMove(e) {
+            if (!isDragging) { return; }
+            //取消預設事件
+            e.preventDefault();
+            e.stopPropagation();
+
+            //追蹤移動位置
+            mouseX = parseInt(e.clientX - offsetX);
+            mouseY = parseInt(e.clientY - offsetY);
+            var clickgrid_row = Math.floor(mouseY / w);
+            var clickgrid_col = Math.floor(mouseX / w);
+
+            //預放範圍
+            //判斷在釋放區中
+            if (clickgrid_row >= 3 && clickgrid_row <= 12
+                && clickgrid_col >= 2 && clickgrid_col <= 11) {
+                for (var i = 0; i < 4; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        //複製拖曳區
+                        target_bricks[i][j] = dragbrick[i][j];
+                        if (dragbrick[i][j] == 1) {
+                            target_bricks_color[i][j] = target_preput_color;
+                        }
+                    }
+                }
+            }
+
+
+            //追蹤渲染
+            paint();
+        }
+
+        /**
+         * 滑鼠放開
+         */
+        function handleMouseUp(e) {
+            if (!isDragging) { return; }
+            //取消預設事件
+            e.preventDefault();
+            e.stopPropagation();
+
+            isDragging = false;//釋放渲染
+
+            //換算滑鼠格
+            var clickgrid_row = Math.floor(mouseY / w);
+            var clickgrid_col = Math.floor(mouseX / w);
+
+            //判斷在釋放區中
+            if (clickgrid_row >= 3 && clickgrid_row <= 12
+                && clickgrid_col >= 2 && clickgrid_col <= 11) {
+                //判斷可放置
+                var allin = true;
+                for (var i = 0; i < 4; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        if (target_bricks[i][j] + bg[i + clickgrid_row - 3][j + clickgrid_col - 2] == 21
+                            || target_bricks[i][j] + bg[i + clickgrid_row - 3][j + clickgrid_col - 2] == 2) {
+                            allin = false;
+                            break;
+                        }
+                    }
+                    if (allin == false) {
+                        break;
+                    }
+                }
+
+                //放置加分
+                if (allin == true) {
+                    for (var i = 0; i < 4; i++) {
+                        for (var j = 0; j < 4; j++) {
+                            //if ((clickgrid_row + i - 3) >= 3 && (clickgrid_row + i - 3) <= 12
+                            //&& (clickgrid_col + j - 2) >= 2 && (clickgrid_col + j - 2) <= 11) {
+                            //放置
+                            if (dragbrick[i][j] == 1) {
+                                bg[i + clickgrid_row - 3][j + clickgrid_col - 2] = dragbrick[i][j];
+                                if (bg[i + clickgrid_row - 3][j + clickgrid_col - 2] == 1) {
+                                    bgc[i + clickgrid_row - 3][j + clickgrid_col - 2] = resetcolorOpacity(dragbrick_color[i][j], '1');
+                                }
+                            }
+                            //}
+                        }
+                    }
+
+                    //檢查消除
+                    checkclear();
+
+                    //放置新的方塊
+                    setbrick(select_index);
+                    select_index = -1;
+
+                    //測試空閒空間
+                    testcannotput();
+
+                    //加分
+                    score += 40;
+                    scoretxt_fontsize = 50;
+                    if (score > maxscore) {//判斷最高分數
+                        maxscore = score;
+                        localStorage.setItem('maxscore', maxscore);
+                        scoretxt_fontsize_MAX = 50;
+                    }
+
+                    timer_score_ani = window.setInterval(setScoreTxtSize, 50);
+                }
+                else { //放置失敗或取消放置
+                    if (select_index != -1) {
+                        for (var i = 0; i < 4; i++) {
+                            for (var j = 0; j < 4; j++) {
+                                if (dragbrick[i][j] == 1) {
+                                    fgc[select_index][i][j] = resetcolorOpacity(dragbrick_color[i][j], '1');
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else { //放置失敗或取消放置
+                if (select_index != -1) {
+                    for (var i = 0; i < 4; i++) {
+                        for (var j = 0; j < 4; j++) {
+                            if (dragbrick[i][j] == 1) {
+                                fgc[select_index][i][j] = resetcolorOpacity(dragbrick_color[i][j], '1');
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            //清理拖曳方塊及預放方塊
+            for (var i = 0; i < 4; i++) {
+                for (var j = 0; j < 4; j++) {
+                    dragbrick[i][j] = -1;
+                    target_bricks[i][j] = -1;
+                    dragbrick_color[i][j] = emptycolor;
+                    target_bricks_color[i][j] = emptycolor;
+                }
+            }
+
+            paint();
+        }
+
+        /**
+         * 滑鼠超出canvas範圍時
+         */
+        function handleMouseOut(e) {
+            if (!isDragging) { return; }
+            e.preventDefault();
+            e.stopPropagation();
+            isDragging = false;
+            //取消放置時回復
+            if (select_index != -1) {
+                for (var i = 0; i < 4; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        if (dragbrick[i][j] == 1) {
+                            fgc[select_index][i][j] = resetcolorOpacity(dragbrick_color[i][j], '1');
+                        }
+                    }
+                }
+            }
+
+            //清理方塊
+            for (var i = 0; i < 4; i++) {
+                for (var j = 0; j < 4; j++) {
+                    dragbrick[i][j] = -1;
+                    target_bricks[i][j] = -1;
+                    dragbrick_color[i][j] = emptycolor;
+                    target_bricks_color[i][j] = emptycolor;
+                }
+            }
+            select_index = -1;
+            paint();
+        }
+
+        // 取得滑鼠相對於canvas的座標
+        function reOffset() {
+            var BB = canvas.getBoundingClientRect();
+            offsetX = BB.left;
+            offsetY = BB.top;
+
+            if (window.outerWidth > window.outerHeight) {
+                windowdir = 'H';//橫版
+                $('#body').attr('style', 'zoom:1;');
+            }
+            else {
+                windowdir = 'V';//直版
+                $('#body').attr('style', 'zoom:1.4;');
+            }
+            paint();
+        }
+
+        reOffset();
+        window.onscroll = function (e) { reOffset(); }
+        window.onresize = function (e) { reOffset(); }
+        canvas.onresize = function (e) { reOffset(); }
+
+        /**檢查消除行 */
+        function checkclear() {
+            var clearlines = [];
+            //橫列
+            for (var i = 2; i <= 11; i++) {
+                var cellcount = 0;
+                for (var j = 2; j <= 11; j++) {
+                    if (bg[i][j] == 1) {
+                        cellcount++;
+                    }
+                }
+                if (cellcount == 10) {//填滿整列
+                    clearlines.push('R_' + i);
+                }
+            }
+            //直行
+            for (var i = 2; i <= 11; i++) {
+                var cellcount = 0;
+                for (var j = 2; j <= 11; j++) {
+                    if (bg[j][i] == 1) {
+                        cellcount++;
+                    }
+                }
+                if (cellcount == 10) {//填滿整列
+                    clearlines.push('C_' + i);
+                }
+            }
+
+            clearline(clearlines);
+        }
+
+        /**
+         * 消除行列並加分
+         * @param linesArray 待消除的陣列
+         */
+        function clearline(linesArray) {
+            if (linesArray.length == 0) { return false; }
+            /*linesArray傳入幾段消除方向的字串陣列
+             * "R_?" = 消除第N列 ?=2~11
+             * "C_?" = 消除第N行 ?=2~11
+             * "I_?" = 消除第N斜線 ?=1~2
+             *  連續消除,每次分數*1.25倍
+             */
+            var score_add = 0;//分次加分
+            for (var i = 0; i < linesArray.length; i++) {
+                //解析要消除的行列
+                var clear_line = linesArray[i].split('_');
+                var index = parseInt(clear_line[1]);
+                if (clear_line[0] == 'R') {//列
+                    for (var j = 2; j <= 11; j++) {
+                        bg[index][j] = 0;
+                        bgc[index][j] = resetcolorOpacity(bgc_space, '0');
+                    }
+                }
+                else if (clear_line[0] == 'C') {//行
+                    for (var j = 2; j <= 11; j++) {
+                        bg[j][index] = 0;
+                        bgc[j][index] = resetcolorOpacity(bgc_space, '0');
+                    }
+                }
+
+                score += ((i + 1) * 1.25 * 100);
+            }
+
+            paint();
+            timer_clearing_ani = window.setInterval(setClearingColorOP, 50);//啟動消條動畫
+            timer_clearing_bool = true;
+        }
+
+        /**測試已經沒有空間可以放了 */
+        function testcannotput() {
+            var cannotput = true;
+            for (var t = 0; t <= 2; t++) {
+                //還原比對方塊組
+                testgroup = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+                //虛擬取得自由區
+                for (var i = 0; i < 4; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        testgroup[i][j] = fg[t][i][j];
+                    }
+                }                
+
+                //虛擬試放(定位左上角(0,0)~(10,10))
+                for (var r = 0; r <= 10; r++) {
+                    for (var c = 0; c <= 10; c++) {
+                        //從左上開始試放16格
+                        //掃描試放方塊,如果完全沒有>1的表示放得進去
+                        var havebound = false;
+                        for (var i = 0; i < 4; i++) {
+                            for (var j = 0; j < 4; j++) {
+                                if ((testgroup[i][j] + bg[r + i][c + j]) == 2
+                                    || (testgroup[i][j] + bg[r + i][c + j]) == 21) {
+                                    havebound = true;
+                                    break;
+                                }
+                            }
+                            if (havebound == true) {
+                                break;
+                            }
+                        }
+
+                        if (havebound == false) {//沒有被卡到
+                            cannotput = false;//可以放下
+                            break;
+                        }
+                    }
+                    if (cannotput == false) {
+                        break;//只要證明可以放就能跳出
+                    }
+                }
+                if (cannotput == false) {
+                    break;//只要證明可以放就能跳出
+                }
+
+                //初始化
+                for (var i = 0; i < 4; i++) {
+                    for (var j = 0; j < 4; j++) {
+                        testgroup[i][j] = 0;
+                    }
+                }
+            }
+
+            //遊戲結束
+            if (cannotput == true) {
+                for (var i = 0; i < bg.length; i++) {
+                    for (var j = 0; j < bg[i].length; j++) {
+                        if (bgc[i][j] != bgc_free) {
+                            bgc[i][j] = resetcolorOpacity(bgc[i][j], '0.3');
+                        }
+                    }
+                }
+                for (var k = 0; k < fg.length; k++) {
+                    for (var i = 0; i < fg[k].length; i++) {
+                        for (var j = 0; j < fg[k][i].length; j++) {
+                            if (fgc[k][i][j] != bgc_free) {
+                                fgc[k][i][j] = resetcolorOpacity(fgc[k][i][j], '0.3');
+                            }
+                        }
+                    }
+                }
+
+                gamestart = false;
+                if (timer_clearing_bool == true) {//結束消條timer
+                    clearInterval(timer_clearing_ani);
+                    timer_clearing_bool = false;
+                }
+
+                paint();
+            }
+        }
+
+        /**
+         * 即時輸出陣列偵錯用
+         * @param obj
+         */
+        function getarraystr(obj) {
+            var str = '';
+            for (var i = 0; i < obj.length; i++) {
+                for (var j = 0; j < obj[i].length; j++) {
+                    str += obj[i][j] + ' ';
+                }
+                str += '\n';
+            }
+            console.log(str)
+        }
+
+        /**依動畫變化分數的文字大小 */
+        function setScoreTxtSize() {
+            if (scoretxt_fontsize_MAX > 30) {
+                scoretxt_fontsize_MAX -= 5;
+                scoretxt_font_MAX = scoretxt_fontsize_MAX + 'px Arial';
+            }
+
+            if (scoretxt_fontsize > 30) {
+                scoretxt_fontsize -= 5;
+                scoretxt_font = scoretxt_fontsize + 'px Arial';
+
+                paint();
+            }
+            else {
+                //叫停timer
+                if (timer_score_ani != null) {
+                    clearInterval(timer_score_ani);
+                }
+            }
+        }
+
+        /**處理消除中的色條不透明度 */
+        function setClearingColorOP() {
+            if (timer_clearing_bool == false) { return false; }
+            for (var i = 2; i <= 11; i++) {
+                for (var j = 2; j <= 11; j++) {
+                    var bgcolor_OP = (Math.floor(parseFloat(bgc[i][j].replace('rgba(', '').replace(')', '').split(',')[3]) * 100) / 100);
+                    if (bgcolor_OP < 1) {
+                        bgcolor_OP = parseFloat(bgcolor_OP + 0.2);
+                        bgc[i][j] = resetcolorOpacity(bgc_space, bgcolor_OP.toString());
+                        paint();
+
+                        if (timer_clearing_bool == true && bgcolor_OP == 1) {//結束消條timer
+                            clearInterval(timer_clearing_ani);
+                            timer_clearing_bool = false;
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,239 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="shortcut icon" href="http://www.google.com/favicon.ico" />
+    <meta charset="utf-8" />
+    <title>彈力高爾夫</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        /*主角初始點*/
+        .flo {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            font-size: 25px;
+        }
+        /*主角得分點*/
+        .flo_target {
+            position: fixed;
+            top: 90px;
+            left: 90px;
+            color: #0094ff;
+            font-size: 25px;
+        }
+
+
+        /*設定背景DIV*/
+        .backgroundbase {
+            width: 600px;
+            height: 600px;
+            border: solid;
+            border-width: 1px;
+            margin-left: 10px;
+            margin-top: 10px;
+        }
+    </style>
+
+    <script>
+        /*●背景基準點：
+         * (16,2)               (607,2)
+         *
+         * (16,591)             (607,591)
+         */
+
+
+        var pos_y = 30;//基本Y座標
+        var pos_x = 30;//基本X座標
+        var xadd = 0;//水平加速度
+        var yadd = 0;//垂直加速度
+        var ranx = 0;//浮動X
+        var rany = 0;//浮動Y
+
+        //邊界設定
+        var Xmin = 16;//左邊界
+        var XMAX = 607;//右邊界
+        var Ymin = 2;//上邊界
+        var YMAX = 591;//下邊界
+        var keyNum = 0;//記錄按下按鍵用
+        var keepkey = 0;//紀錄暫留鍵
+
+        var score = 0;//紀錄分數
+        var point_X = 90;//得點X座標
+        var point_Y = 90;//得點Y座標
+        var bool_isrand = false;
+
+        //隨機重製得分點位置
+        function resetpoint() {
+            point_X = Math.floor(Math.random() * 580) + 20;
+            point_Y = Math.floor(Math.random() * 580) + 20;
+            $('#point').css('left', point_X + 'px');
+            $('#point').css('top', point_Y + 'px');
+        }
+
+        window.setInterval(update, 30);//幀率，每30毫秒刷新一次
+        //移動
+        function update() {
+            //●●擾動
+            if (bool_isrand == true) {
+                var ranudy = Math.random() < 0.5 ? -1 : 1;//Y正負
+                var ranudx = Math.random() < 0.5 ? -1 : 1;//X正負
+                rany = Math.floor(Math.random() * 2 * ranudy);
+                ranx = Math.floor(Math.random() * 2 * ranudx);
+            }
+
+            //●●設定座標
+            pos_y = pos_y + yadd + rany;//Y = 原Y坐標 + Y加速度 + Y擾動
+            pos_x = pos_x + xadd + ranx;//X = 原X坐標 + X加速度 + X擾動
+
+            //●●移動
+            //Y邊界判定
+            if (pos_y < Ymin) {
+                $('#car').css('top', Ymin + 'px');
+                pos_y = Ymin
+                yadd = (yadd + 4) * -1;//彈開
+            }
+            else if (pos_y > YMAX) {
+                $('#car').css('top', YMAX + 'px');
+                pos_y = YMAX
+                yadd = (yadd - 4) * -1;//彈開
+            }
+            else {
+                $('#car').css('top', pos_y + 'px');
+            }
+            //X邊界判定
+            if (pos_x < Xmin) {
+                $('#car').css('left', Xmin + 'px');
+                pos_x = Xmin
+                xadd = (xadd + 4) * -1;//彈開
+            }
+            else if (pos_x > XMAX) {
+                $('#car').css('left', XMAX + 'px');
+                pos_x = XMAX
+                xadd = (xadd - 4) * -1;//彈開
+            }
+            else {
+                $('#car').css('left', pos_x + 'px');
+            }
+
+            //●●得分撞擊偵測
+            if (pos_x >= (point_X - 11) && (pos_x <= (point_X + 11)
+                && pos_y >= (point_Y - 11) && (pos_y <= point_Y + 11))
+            ) {
+                resetpoint();//重製得分點
+                score++;//得分
+                $('#score').text(score);//刷新分數
+            }
+
+            //●●更新資訊
+            $('#ypos').text(pos_y);
+            $('#xpos').text(pos_x);
+
+            //●●加速器減速
+            if (xadd > 0) {
+                xadd -= 1;
+            }
+            else if (xadd < 0) {
+                xadd += 1;
+            }
+
+            if (yadd > 0) {
+                yadd -= 1;
+            }
+            else if (yadd < 0) {
+                yadd += 1;
+            }
+        }
+
+        //按鍵加速
+        document.onkeydown = function (e) {  //對整個頁面文件監聽
+            keyNum = window.event ? e.keyCode : e.which;  //獲取被按下的鍵值
+            if (keepkey == 0) {
+                keepkey = window.event ? e.keyCode : e.which;//紀錄暫留鍵
+            }
+            else {
+                //上W
+                if (keepkey == 87 || keepkey == 38) {
+                    pos_y = parseInt($('#car').css('top').substr(0, $('#car').css('top').length - 2));//取得原有Y軸
+                    yadd = yadd - 5;
+                }
+                //下S
+                if (keepkey == 83 || keepkey == 40) {
+                    pos_y = parseInt($('#car').css('top').substr(0, $('#car').css('top').length - 2));//取得原有Y軸
+                    yadd = yadd + 5;
+                }
+                //左A
+                if (keepkey == 65 || keepkey == 37) {
+                    pos_x = parseInt($('#car').css('left').substr(0, $('#car').css('left').length - 2));//取得原有X軸
+                    xadd = xadd - 5;
+                }
+                //右D
+                if (keepkey == 68 || keepkey == 39) {
+                    pos_x = parseInt($('#car').css('left').substr(0, $('#car').css('left').length - 2));//取得原有X軸
+                    xadd = xadd + 5;
+                }
+            }
+            //上W
+            if (keyNum == 87 || keyNum == 38) {
+                pos_y = parseInt($('#car').css('top').substr(0, $('#car').css('top').length - 2));//取得原有Y軸
+                yadd = yadd - 5;
+            }
+            //下S
+            if (keyNum == 83 || keyNum == 40) {
+                pos_y = parseInt($('#car').css('top').substr(0, $('#car').css('top').length - 2));//取得原有Y軸
+                yadd = yadd + 5;
+            }
+            //左A
+            if (keyNum == 65 || keyNum == 37) {
+                pos_x = parseInt($('#car').css('left').substr(0, $('#car').css('left').length - 2));//取得原有X軸
+                xadd = xadd - 5;
+            }
+            //右D
+            if (keyNum == 68 || keyNum == 39) {
+                pos_x = parseInt($('#car').css('left').substr(0, $('#car').css('left').length - 2));//取得原有X軸
+                xadd = xadd + 5;
+            }
+        }
+        //放掉按鍵時清除暫留鍵
+        document.onkeyup = function (e) {
+            if (keepkey == e.keyCode) {
+                keepkey = 0;
+            }
+        }
+
+        //開關擾動
+        function openrdn() {
+            bool_isrand = $('#ckb').prop("checked");
+            if (bool_isrand == false) {
+                ranx = 0;
+                rany = 0;
+            }
+        }
+
+    </script>
+</head>
+<body>
+    <!--背景-->
+    <div class="backgroundbase">
+        <!--主角車-->
+        <span id="car" class="flo">●</span>
+        <span id="point" class="flo_target">●</span>
+    </div>
+
+    <!--畫面資訊-->
+    <div style="margin-left:10px">
+        操作：[W][A][S][D]鍵 或是 [↑][←][↓][→]鍵
+        <br />
+        目標：撞到藍色球可得分
+        <br />
+        X軸：<span id="xpos">60</span>　/　Y軸：<span id="ypos">60</span>
+        <br />
+        分數：<span id="score">0</span>
+		<br />
+		擾動：<input type="checkbox" id="ckb" value="Y" onchange="openrdn()" />
+    </div>
+
+    <script>
+        resetpoint();
+    </script>
+</body>
+</html>

@@ -1,0 +1,312 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="shortcut icon" href="http://www.google.com/favicon.ico" />
+    <meta charset="utf-8" />
+    <title>實驗百步蛇</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        td {
+            width: 32px;
+            height: 32px;
+            border: 1px solid #ccc;
+            text-align: center;
+            vertical-align: central;
+        }
+
+        .snakhead {
+            background-color: #d1910d;
+        }
+
+        .snakbody {
+            background-color: #000000;
+        }
+
+        .snaktarget {
+            background-color: #10a955;
+        }
+
+        .snakbody_hide {
+            background-color: rgba(41, 173, 64, 0.55);
+        }
+    </style>
+    <script>
+        //蛇的頭身座標
+        var Snak = [
+            {
+                "X": 10,
+                "Y": 10
+            }
+        ];
+
+        var Target = [0, 0];
+        var Snak_dir = 'R';//預設先往右
+        var timer_snakmoveID;//計時器ID_蛇行動
+        var isPlaying = false;//是否進行遊戲中
+        var gametime = 0;//計時
+        var timer_gametimeID;//計時器ID_遊玩時間
+
+        $(function () {
+            //建置地圖
+            initMap();
+            //初始放蛇頭
+            DrowSnak();
+        });
+
+        //遊戲計時
+        function gametiming() {
+            gametime++;
+            $('#lb_time').text(gametime);
+        }
+
+        /**遊戲開始及初始設定 */
+        function gameStart() {
+            if (timer_snakmoveID != null) {
+                clearInterval(timer_snakmoveID);
+            }
+            if (timer_gametimeID != null) {
+                clearInterval(timer_gametimeID);
+            }
+
+            //初始化蛇頭
+            Snak = [
+                {
+                    "X": 10,
+                    "Y": 10
+                }];
+
+            //開始計時
+            timer_snakmoveID = window.setInterval(Snak_Move, 300);
+            timer_gametimeID = window.setInterval(gametiming, 1000);
+            $('#btn_Start').attr('disabled', 'disabled');
+            $('#btn_Start').val('重來');
+            $('#btn_Pause').removeAttr('disabled');
+            $('#btn_Contiune').attr('disabled', 'disabled');
+            isPlaying = true;
+            $('#lb_snaklen').text('1');
+            gametime = 0;
+            $('#lb_time').text(gametime);
+            //放目標
+            resetTarget();
+        }
+
+        /**建立基礎地圖 */
+        function initMap() {
+            for (var i = 1; i <= 20; i++) {
+                var insert_html = '<tr id="tr_' + i + '">●</tr>';
+                var insert_td = '';
+                for (var j = 1; j <= 20; j++) {
+                    insert_td += '<td id="td_' + i + '_' + j + '" class=""></td>';
+                }
+                insert_html = insert_html.replace(/●/g, insert_td);
+                $('#tb').append(insert_html);
+            }
+        }
+
+        /**蛇往前移動(變動座標記錄) */
+        function Snak_Move() {
+            var before_snak;
+            for (var i = 0; i < Snak.length; i++) {
+                if (i == 0) {
+                    before_snak = [Snak[0].X, Snak[0].Y];
+                    //頭節決定前進方向
+                    var goXY = [];
+                    switch (Snak_dir) {
+                        case "U":
+                            goXY = [Snak[0].X - 1, Snak[0].Y];
+                            break;
+                        case "D":
+                            goXY = [Snak[0].X + 1, Snak[0].Y];
+                            break;
+                        case "L":
+                            goXY = [Snak[0].X, Snak[0].Y - 1];
+                            break;
+                        case "R":
+                            goXY = [Snak[0].X, Snak[0].Y + 1];
+                            break;
+                    }
+                    //檢查撞壁
+                    if (goXY[0] == 0 || goXY[1] == 0 || goXY[0] == 21 || goXY[1] == 21) {
+                        $('#btn_Pause').attr('disabled', 'disabled');
+                        //停止計時器
+                        $('#btn_Start').removeAttr('disabled');
+                        clearInterval(timer_snakmoveID);
+                        clearInterval(timer_gametimeID);
+                        DrowSnak();
+                        alert("GameOver!");
+                        return;
+                    }
+                    //檢查撞身
+                    else if ($('#td_' + goXY[0] + '_' + goXY[1]).attr('class') == 'snakbody') {
+                        $('#btn_Pause').attr('disabled', 'disabled');
+                        //停止計時器
+                        $('#btn_Start').removeAttr('disabled');
+                        clearInterval(timer_snakmoveID);
+                        clearInterval(timer_gametimeID);
+                        DrowSnak();
+                        alert("GameOver!");
+                        return;
+                    }
+                    //檢查得分
+                    else if (goXY[0] == Target[0] && goXY[1] == Target[1]) {
+                        //尾巴增加一節
+                        Snak.push({ "X": Snak[Snak.length - 1].X, "Y": Snak[Snak.length - 1].Y });
+                        //呼叫刷新目標
+                        resetTarget();
+                        //蛇長
+                        $('#lb_snaklen').text(Snak.length);
+                        if (Snak.length == 100) {
+                            var res = confirm('您已達到100分，請問是否繼續？');
+                            if (res == false) {
+                                $('#btn_Pause').clack();
+                            }
+                        }
+                    }
+
+                    //移動頭部
+                    Snak[0].X = goXY[0];
+                    Snak[0].Y = goXY[1];
+                }
+                else {//身體移動
+                    var temp = [Snak[i].X, Snak[i].Y];
+                    Snak[i].X = before_snak[0];
+                    Snak[i].Y = before_snak[1];
+                    before_snak = [temp[0], temp[1]];//備份原本此節所在的位置
+                }
+            }
+
+            //畫出蛇
+            DrowSnak();
+        }
+
+        /**繪出蛇 */
+        function DrowSnak() {
+            //先清除地圖
+            $('#tb td').attr("class", '');
+            $('#tb td').text('');
+            //畫目標
+            $('#td_' + Target[0] + '_' + Target[1]).attr('class', 'snaktarget');
+            //畫蛇
+            for (var i = 0; i < Snak.length; i++) {
+                if (i == 0) {
+                    $('#td_' + Snak[i].X + '_' + Snak[i].Y).attr('class', 'snakhead');
+                }
+                else {
+                    if (Snak[i].X == Target[0] && Snak[i].Y == Target[1]) {//身體遮蔽目標時
+                        $('#td_' + Snak[i].X + '_' + Snak[i].Y).attr('class', 'snakbody_hide');
+                    }
+                    else {
+                        $('#td_' + Snak[i].X + '_' + Snak[i].Y).attr('class', 'snakbody');
+                    }
+                }
+            }
+            //畫方向
+            switch (Snak_dir) {
+                case 'U'://上
+                    $('#td_' + Snak[0].X + '_' + Snak[0].Y).text('↑');
+                    break;
+                case 'D'://下
+                    $('#td_' + Snak[0].X + '_' + Snak[0].Y).text('↓');
+                    break;
+                case 'L'://左
+                    $('#td_' + Snak[0].X + '_' + Snak[0].Y).text('←');
+                    break;
+                case 'R'://右
+                    $('#td_' + Snak[0].X + '_' + Snak[0].Y).text('→');
+                    break;
+            }
+        }
+
+        //讀取按鍵方向
+        document.onkeydown = function (e) {  //對整個頁面文件監聽
+            keyNum = window.event ? e.keyCode : e.which;  //獲取被按下的鍵值
+            //P暫停
+            if (keyNum == 80) {
+                $('#btn_Pause').click();
+            }
+
+            if (isPlaying == false) {//非暫停時才能操作方向
+                return;
+            }
+
+            //上W
+            if (keyNum == 87 || keyNum == 38) {
+                //禁反向
+                if (Snak_dir == 'D') {
+                    return;
+                }
+                Snak_dir = 'U';
+
+            }
+            //下S
+            if (keyNum == 83 || keyNum == 40) {
+                //禁反向
+                if (Snak_dir == 'U') {
+                    return;
+                }
+                Snak_dir = 'D';
+            }
+            //左A
+            if (keyNum == 65 || keyNum == 37) {
+                //禁反向
+                if (Snak_dir == 'R') {
+                    return;
+                }
+                Snak_dir = 'L';
+            }
+            //右D
+            if (keyNum == 68 || keyNum == 39) {
+                //禁反向
+                if (Snak_dir == 'L') {
+                    return;
+                }
+                Snak_dir = 'R';
+            }
+
+            //多刷新一次
+            Snak_Move();
+        }
+
+        /**遊戲暫停 */
+        function gamePause() {
+            clearInterval(timer_snakmoveID);
+            clearInterval(timer_gametimeID);
+            $('#btn_Start').removeAttr('disabled');
+            $('#btn_Pause').attr('disabled', 'disabled');
+            $('#btn_Contiune').removeAttr('disabled');
+            isPlaying = false;
+        }
+
+        /**遊戲繼續 */
+        function gameContiune() {
+            timer_snakmoveID = window.setInterval(Snak_Move, 300);
+            timer_gametimeID = window.setInterval(gametiming, 1000);
+            $('#btn_Start').attr('disabled', 'disabled');
+            $('#btn_Pause').removeAttr('disabled');
+            $('#btn_Contiune').attr('disabled', 'disabled');
+            isPlaying = true;
+        }
+
+        /**隨機在地圖上放一個目標 */
+        function resetTarget() {
+            Target[0] = Math.floor(Math.random() * 20) + 1;
+            Target[1] = Math.floor(Math.random() * 20) + 1;
+        }
+    </script>
+
+</head>
+<body>
+    <div align="center">
+        <input id="btn_Start" type="button" value="開始" onclick="gameStart()" />
+        <input id="btn_Pause" type="button" value="暫停" onclick="gamePause()" disabled="disabled" />
+        <input id="btn_Contiune" type="button" value="繼續" onclick="gameContiune()" />
+    </div>
+    <table id="tb" style="border: 3px #cccccc solid;width: 50%;height: 600px;" border='1' align="center">
+    </table>
+    <div align="center" style="font-size:30px">
+        節數：<span id="lb_snaklen">1</span>
+        時間：<span id="lb_time">0</span>
+    </div>
+
+</body>
+</html>

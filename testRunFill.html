@@ -1,0 +1,444 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <link rel="shortcut icon" href="http://www.google.com/favicon.ico" />
+    <meta charset="utf-8" />
+    <title>超級清潔工</title>
+    <script src="jquery-3.4.0.min.js"></script>
+
+    <style>
+        td {
+            width: 25px;
+            height: 25px;
+            border: none;
+            text-align: center;
+            vertical-align: central;
+            font-size: 16px;
+            border-spacing:0px;
+            padding:0 0 0 0;
+            border-collapse:collapse;
+        }
+
+        .player {
+            background-color: #d1910d;
+        }
+
+        .td_empay {
+            background-color: #FFFFFF;
+        }
+
+        .td_wall {
+            /*background-color: #000000;*/
+            background-image: url("img/Bricks.png");
+        }
+
+        .player_fill {
+            background-color: #b2ffff;
+        }
+    </style>
+    <script>
+        var map_Height = 20;//地圖高
+        var map_Width = 25;//地圖寬
+        var canfill = 1;//可行步數
+        var filleds = 1;//已填步數
+        var fillrouts = [];//紀錄可行的座標
+        var routwallper = 3.2;//路牆比(地圖格數/<?> = 牆壁數)
+
+        var isPlaying = false;//是否進行遊戲中
+        var player_xy = [];//玩家座標
+        var player_dir = '';//玩家方向
+        
+        var enemy_xy = [];//紀錄敵人的位置
+        var timer_enemyID;//敵人計時器
+        var timer_gametimeID;//計時器ID_遊玩時間
+        var gametime = 0;//遊戲時間
+
+        $(function () {
+            //初始化
+            var setting = true;
+            while (setting) {
+                reset();
+                //如果可行步數小於地圖一半就刷新重來
+                if (canfill >= ((map_Width * map_Height) / 2)) {
+                    setting = false;
+                }
+            }
+
+            //生成敵人
+            setEnemy();
+
+        });
+
+        /**遊戲開始 */
+        function gameStart() {
+            isPlaying = true;
+            $('#btn_Start').attr('disabled', 'disabled');
+            $('#btn_resetEnemy').attr('disabled', 'disabled');
+            $('#btn_Pause').removeAttr('disabled');
+            $('#btn_Contiune').attr('disabled', 'disabled');
+            $('#btn_Restart').attr('disabled', 'disabled');
+            //敵人計時器
+            if (timer_enemyID != null) {
+                clearInterval(timer_enemyID);
+            }
+            if (timer_gametimeID != null) {
+                clearInterval(timer_gametimeID);
+            }
+            timer_enemyID = window.setInterval(EnemyMove_quick, 500);
+            timer_gametimeID = window.setInterval(gametiming, 1000);
+        }
+
+        /**遊戲時間 */
+        function gametiming() {
+            gametime++;
+            $('#lb_time').text(gametime);
+        }
+
+        /**遊戲暫停 */
+        function gamePause() {
+            clearInterval(timer_enemyID);
+            clearInterval(timer_gametimeID);
+           // $('#btn_Start').removeAttr('disabled');
+            $('#btn_Pause').attr('disabled', 'disabled');
+            $('#btn_Contiune').removeAttr('disabled');
+            $('#btn_Restart').removeAttr('disabled');
+
+            isPlaying = false;
+        }
+
+        /**遊戲繼續 */
+        function gameContiune() {
+            timer_enemyID = window.setInterval(EnemyMove_quick, 500);
+            timer_gametimeID = window.setInterval(gametiming, 1000);
+            //$('#btn_Start').attr('disabled', 'disabled');
+            $('#btn_Pause').removeAttr('disabled');
+            $('#btn_Contiune').attr('disabled', 'disabled');
+            $('#btn_Restart').attr('disabled', 'disabled');
+            isPlaying = true;
+        }
+
+        /**建立基礎地圖 */
+        function initMap() {
+            for (var i = 1; i <= map_Height; i++) {
+                var insert_html = '<tr id="tr_' + i + '">●</tr>';
+                var insert_td = '';
+                for (var j = 1; j <= map_Width; j++) {
+                    insert_td += '<td id="td_' + i + '_' + j + '" class="td_empay"></td>';
+                }
+                insert_html = insert_html.replace(/●/g, insert_td);
+                $('#tb').append(insert_html);
+            }
+        }
+
+        /**重設初始化 */
+        function reset() {
+            //清空地圖並初始化參數
+            $('#tb').empty();
+            isPlaying = false;//是否進行遊戲中
+            player_xy = [];
+            player_dir = '';
+            canfill = 1;
+            filleds = 1;
+
+            //建立地圖
+            initMap();
+
+            //隨機設置主角
+            var ranX = Math.floor(Math.random() * map_Height) + 1;
+            var ranY = Math.floor(Math.random() * map_Width) + 1;
+            player_xy = [ranX, ranY];
+            //顯示主角
+            $('#td_' + ranX + '_' + ranY).text('🧍');
+            $('#td_' + ranX + '_' + ranY).attr('class', 'player_fill');
+
+            //隨機設置牆壁
+            var wallcount = Math.round((map_Width * map_Height) / routwallper);
+            for (var i = 0; i < wallcount; i++) {
+                var ranWX = Math.floor(Math.random() * map_Height) + 1;
+                var ranWY = Math.floor(Math.random() * map_Width) + 1;
+                if (ranWX == ranX && ranWY == ranY
+                    || $('#td_' + ranWX + '_' + ranWY).attr('class') == 'td_wall') {
+                    i--;
+                    continue;
+                }
+                $('#td_' + ranWX + '_' + ranWY).attr('class', 'td_wall');
+            }
+
+            //計算可以走的路
+            setCanFills();
+
+        }
+
+        //角色移動
+        //讀取按鍵方向
+        document.onkeydown = function (e) {  //對整個頁面文件監聽
+            keyNum = window.event ? e.keyCode : e.which;  //獲取被按下的鍵值
+            //P暫停
+            if (keyNum == 80) {
+                $('#btn_Pause').click();
+            }
+
+            if (isPlaying == false) {//非暫停時才能操作方向
+                return;
+            }
+
+            //上W
+            if (keyNum == 87 || keyNum == 38) {
+                player_dir = 'U';
+            }
+            //下S
+            if (keyNum == 83 || keyNum == 40) {
+                player_dir = 'D';
+            }
+            //左A
+            if (keyNum == 65 || keyNum == 37) {
+                player_dir = 'L';
+            }
+            //右D
+            if (keyNum == 68 || keyNum == 39) {
+                player_dir = 'R';
+            }
+
+            //移動
+            player_Move();
+        }
+        /**角色走動 */
+        function player_Move() {
+            var temptarget = [player_xy[0], player_xy[1]];
+            switch (player_dir) {
+                case 'U':
+                    if (player_xy[0] == 1) {
+                        return;
+                    }
+                    temptarget[0] = temptarget[0] - 1;//走動
+                    break;
+                case 'D':
+                    if (player_xy[0] == map_Height) {
+                        return;
+                    }
+                    temptarget[0] = temptarget[0] + 1;
+                    break;
+                case 'L':
+                    if (player_xy[1] == 1) {
+                        return;
+                    }
+                    temptarget[1] = temptarget[1] - 1;
+                    break;
+                case 'R':
+                    if (player_xy[1] == map_Width) {
+                        return;
+                    }
+                    temptarget[1] = temptarget[1] + 1;
+                    break;
+            }
+            //檢查是否在牆壁
+            if ($('#td_' + temptarget[0] + '_' + temptarget[1]).attr('class') != 'td_wall') {
+                //清除
+                $('#td_' + player_xy[0] + '_' + player_xy[1]).text('');
+                //位置刷新
+                player_xy[0] = temptarget[0];
+                player_xy[1] = temptarget[1];
+                $('#td_' + player_xy[0] + '_' + player_xy[1]).text('🧍');
+                //著色
+                if ($('#td_' + player_xy[0] + '_' + player_xy[1]).attr('class') == 'td_empay') {
+                    $('#td_' + player_xy[0] + '_' + player_xy[1]).attr('class', 'player_fill');
+                    filleds++;
+                    $('#lb_stepOK').text(filleds);
+
+                    //如果走完所有路徑
+                    if (filleds == canfill) {
+                        alert('你贏了!');
+                        clearInterval(timer_enemyID);
+                        clearInterval(timer_gametimeID);
+                        $('#btn_Start').attr('disabled');
+                        $('#btn_Pause').attr('disabled', 'disabled');
+                        $('#btn_Contiune').attr('disabled', 'disabled');
+                        $('#btn_Restart').removeAttr('disabled');
+                        isPlaying = false;
+                    }
+                }
+            }
+        }
+
+        /**計算所有可能觸及的步數 */
+        function setCanFills() {
+            //設定起點=玩家位置
+            try {
+                //宣告封閉表
+                var dt_close = [];
+                //開放表(待檢查的點)
+                var dt_open = [];
+                var nowpoint = [player_xy[0], player_xy[1]];//現在點=起始點
+                //開始找路
+                var isfinding = true;
+                while (isfinding) {
+                    //取得候選點清單,先搜尋附近可走路
+                    var templist = [];
+                    templist.push({ "Xpoint": nowpoint[0] - 1, "Ypoint": nowpoint[1] });//正上
+                    templist.push({ "Xpoint": nowpoint[0], "Ypoint": nowpoint[1] - 1 });//左中
+                    templist.push({ "Xpoint": nowpoint[0], "Ypoint": nowpoint[1] + 1 });//右中
+                    templist.push({ "Xpoint": nowpoint[0] + 1, "Ypoint": nowpoint[1] });//正下
+                    //篩選
+                    for (var i = 0; i < templist.length; i++) {
+                        //加入前提：不在開放列表、不在封閉列表、不是牆壁、不是邊際
+                        //不在開放表內
+                        if (($.grep(dt_open, function (item, index) {
+                            return (item.Xpoint == templist[i].Xpoint && item.Ypoint == templist[i].Ypoint);
+                        })).length == 0) {
+                            //不在封閉表內，不是邊際
+                            if ((($.grep(dt_close, function (itemc, index) {
+                                return (itemc.Xpoint == templist[i].Xpoint && itemc.Ypoint == templist[i].Ypoint);
+                            })).length == 0
+                            ) && templist[i].Xpoint > 0 && templist[i].Ypoint > 0 && templist[i].Xpoint < map_Height + 1 && templist[i].Ypoint < map_Width + 1
+                            ) {
+                                //不是牆壁
+                                if ($('#td_' + templist[i].Xpoint + '_' + templist[i].Ypoint).attr('class') != 'td_wall') {
+                                    {
+                                        //加入開放表
+                                        dt_open.push(
+                                            {
+                                                "Xpoint": templist[i].Xpoint,
+                                                "Ypoint": templist[i].Ypoint
+                                            }
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    //把開放表的最後一格放入封閉表,且移動到此格
+                    dt_close.push({
+                        "Xpoint": dt_open[dt_open.length - 1].Xpoint,
+                        "Ypoint": dt_open[dt_open.length - 1].Ypoint
+                    });
+                    nowpoint = [dt_open[dt_open.length - 1].Xpoint, dt_open[dt_open.length - 1].Ypoint];
+                    //開放表移除此格
+                    dt_open.splice(dt_open.length - 1, 1);
+
+                    //如果清空時跳出迴圈
+                    if (dt_open.length == 0) {
+                        isfinding = false;
+                        break;
+                    }
+                }
+
+                //計算封閉表裡面共幾格
+                canfill = dt_close.length;
+                $('#lb_stepcount').text(canfill);
+                //備份可走的路
+                fillrouts = dt_close;
+            }
+            catch (e) {
+                console.log(e);
+            }
+        }
+
+        /**設置敵人位置 */
+        function setEnemy() {
+            //清除前一個敵人的位置
+            if (enemy_xy.length >= 1) {
+                $('#td_' + enemy_xy[0] + '_' + enemy_xy[1]).text('');
+            }
+
+            //敵人隨機生成位置
+            for (var i = 1; i <= 1; i++) {
+                var ranEne = Math.floor(Math.random() * fillrouts.length) - 1;
+                if ($('#td_' + fillrouts[ranEne].Xpoint + '_' + fillrouts[ranEne].Ypoint).text() == '🧍') {
+                    i--;
+                    continue;
+                }
+                $('#td_' + fillrouts[ranEne].Xpoint + '_' + fillrouts[ranEne].Ypoint).text('🐞');
+            }
+
+            enemy_xy = [fillrouts[ranEne].Xpoint, fillrouts[ranEne].Ypoint];
+        }
+
+        /**敵人移動(貪心尋路法) */
+        function EnemyMove_quick() {
+            if (isPlaying == false) {
+                return false;
+            }
+
+            try {
+                var dt_open = [];
+
+                //列出敵人附近四格可走的路
+                var templist = [];
+                templist.push({ "Xpoint": enemy_xy[0] - 1, "Ypoint": enemy_xy[1] });//正上
+                templist.push({ "Xpoint": enemy_xy[0], "Ypoint": enemy_xy[1] - 1 });//左中
+                templist.push({ "Xpoint": enemy_xy[0], "Ypoint": enemy_xy[1] + 1 });//右中
+                templist.push({ "Xpoint": enemy_xy[0] + 1, "Ypoint": enemy_xy[1] });//正下
+
+                //篩選
+                for (var i = 0; i < templist.length; i++) {
+                    //不是牆壁、不是邊際
+                    if (templist[i].Xpoint > 0 && templist[i].Ypoint > 0 && templist[i].Xpoint < map_Height + 1 && templist[i].Ypoint < map_Width + 1) {
+                        //不是牆壁
+                        if ($('#td_' + templist[i].Xpoint + '_' + templist[i].Ypoint).attr('class') != 'td_wall') {
+                            //計算與玩家的直線距離
+                            var Hscore = (Math.abs(player_xy[0] - templist[i].Xpoint) + Math.abs(player_xy[1] - templist[i].Ypoint));
+                            //加入開放表
+                            dt_open.push(
+                                {
+                                    "Xpoint": templist[i].Xpoint,
+                                    "Ypoint": templist[i].Ypoint,
+                                    "Hscore": Hscore
+                                }
+                            );
+                        }
+                    }
+                }
+
+                //尋找最短距離的一格
+                var min_Hscore = dt_open[0].Hscore;
+                var min_index = 0;
+                for (var i = 0; i < dt_open.length; i++) {
+                    if (dt_open[i].Hscore < min_Hscore) {
+                        min_Hscore = dt_open[i].Hscore;
+                        min_index = i;
+                    }
+                }
+
+                //敵人移動一格
+                $('#td_' + enemy_xy[0] + '_' + enemy_xy[1]).text('');
+                enemy_xy = [dt_open[min_index].Xpoint, dt_open[min_index].Ypoint];
+                //如果撞上玩家則結束
+                if ($('#td_' + enemy_xy[0] + '_' + enemy_xy[1]).text() == '🧍') {
+                    alert('你掛了!');
+                    isPlaying = false;
+                    //遊戲結束
+                    clearInterval(timer_enemyID);
+                    clearInterval(timer_gametimeID);
+                    $('#td_' + enemy_xy[0] + '_' + enemy_xy[1]).attr('style','background-color: #ff0000;');                
+                    $('#btn_Start').attr('disabled');
+                    $('#btn_Pause').attr('disabled', 'disabled');
+                    $('#btn_Contiune').attr('disabled', 'disabled');
+                    $('#btn_Restart').removeAttr('disabled');
+                }
+
+                $('#td_' + enemy_xy[0] + '_' + enemy_xy[1]).text('🐞');                
+
+            } catch (e) {
+                console.log(e);
+            }
+        }
+    </script>
+</head>
+<body>
+    <div align="center">
+        <input id="btn_Start" type="button" value="開始" onclick="gameStart()" />
+        <input id="btn_resetEnemy" type="button" value="重設敵人" onclick="setEnemy()" />
+        <input id="btn_Pause" type="button" value="暫停" onclick="gamePause()" disabled="disabled" />
+        <input id="btn_Contiune" type="button" value="繼續" onclick="gameContiune()" disabled="disabled" />
+        <input id="btn_Restart" type="button" value="重玩" onclick="location.reload()" disabled="disabled" />
+    </div>
+    <table id="tb" style="border: 3px #cccccc solid;" border='1' align="center" rules="none">
+    </table>
+    <div align="center" style="font-size: 20px">
+        完成步數：<span id="lb_stepOK">1</span>/<span id="lb_stepcount">0</span>
+        <br />
+        時間：<span id="lb_time">0</span>
+    </div>
+</body>
+</html>

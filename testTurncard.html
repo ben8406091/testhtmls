@@ -1,0 +1,251 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>實驗翻牌</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        td {
+            width: 15px;
+            height: 15px;
+            border: 1px solid #ccc;
+            text-align: center;
+            vertical-align: central;
+        }
+    </style>
+    <title>測試翻牌</title>
+    <script>
+        var type1 = '○';
+        var type2 = '●';
+        var gamestart = false;
+
+        $(function () {
+            //resetmap();
+            resetmap_defult();
+        });
+
+        /**
+         * 翻牌
+         * @param objid 物件ID
+         * @param dir 方向{H=橫向/V=縱向/I=斜向}
+         */
+        function trun(objid, dir) {
+            if (dir == 'H') {//橫向翻牌
+                var rownumber = objid.split('_')[1];//取列號
+                for (var i = 1; i <= 6; i++) {
+                    var content = $('#td_' + rownumber + '_' + i).text();
+                    if (content == type2) {
+                        $('#td_' + rownumber + '_' + i).text(type1);
+                    }
+                    else {
+                        $('#td_' + rownumber + '_' + i).text(type2);
+                    }
+                }
+            }
+            else if (dir == 'V') {//縱向翻牌
+                var colnumber = objid.split('_')[2];//取行號
+                for (var i = 1; i <= 6; i++) {
+                    var content = $('#td_' + i + '_' + colnumber).text();
+                    if (content == type2) {
+                        $('#td_' + i + '_' + colnumber).text(type1);
+                    }
+                    else {
+                        $('#td_' + i + '_' + colnumber).text(type2);
+                    }
+                }
+            }
+            else if (dir == 'I') {//斜向翻牌
+                if (objid.split('_')[1] == '0') {//🢆
+                    for (var i = 6; i >= 1; i--) {
+                        var content = $('#td_' + i + '_' + i).text();
+                        if (content == type2) {
+                            $('#td_' + i + '_' + i).text(type1);
+                        }
+                        else {
+                            $('#td_' + i + '_' + i).text(type2);
+                        }
+                    }
+                }
+                else {//🢅
+                    for (var i = 6; i >= 1; i--) {
+                        var content = $('#td_' + i + '_' + (7 - i)).text();
+                        if (content == type2) {
+                            $('#td_' + i + '_' + (7 - i)).text(type1);
+                        }
+                        else {
+                            $('#td_' + i + '_' + (7 - i)).text(type2);
+                        }
+                    }
+                }
+            }
+
+            if (gamestart == true) {
+                checkpass();//檢查過關
+            }            
+        }
+
+        /**
+         * 九宮格翻牌
+         * @param objid
+         */
+        function blocktrun(objid) {
+            var target_row = parseInt(objid.split('_')[1]);
+            var target_col = parseInt(objid.split('_')[2]);
+
+            //找出附近九宮格+篩除超出邊界
+            var cards = [];
+            for (var i = -1; i <= 1; i++) {
+                for (var j = -1; j <= 1; j++) {
+                    if ((target_row + i) > 0 && (target_row + i) < 7
+                        && (target_col) + j > 0 && (target_col + j < 7)) {
+                        cards.push([(target_row + i), (target_col + j)]);
+                    }
+                }
+            }
+
+            //翻牌
+            for (var k = 0; k < cards.length; k++) {
+                if ($('#td_' + cards[k][0] + '_' + cards[k][1]).text() == type1) {
+                    $('#td_' + cards[k][0] + '_' + cards[k][1]).text(type2);
+                }
+                else {
+                    $('#td_' + cards[k][0] + '_' + cards[k][1]).text(type1);
+                }
+            }
+        }
+
+        /**隨機生成題目 */
+        function resetmap() {
+            for (var i = 1; i <= 6; i++) {
+                for (var j = 1; j <= 6; j++) {
+                    var rand = Math.floor(Math.random() * 2);
+                    if (rand == '0') {
+                        $('#td_' + i + '_' + j).text(type1);
+                    }
+                    else {
+                        $('#td_' + i + '_' + j).text(type2);
+                    }
+                }
+            }
+        }
+
+        /**生成全空題目+隨機點按鈕生成題目 */
+        function resetmap_defult() {
+            //先全部補成空
+            for (var i = 1; i <= 6; i++) {
+                for (var j = 1; j <= 6; j++) {
+                    $('#td_' + i + '_' + j).text(type1);
+                }
+            }
+
+            //按鈕清單
+            var buttons = [];
+            for (var i = 0; i <= 7; i++) {
+                buttons.push([i, 0]);
+            }
+            for (var i = 1; i <= 6; i++) {
+                buttons.push([7, i]);
+            }
+
+            //隨機點按
+            for (var i = 0; i < 100; i++) {
+                var rand_button = Math.floor(Math.random() * buttons.length);
+                $('#td_' + buttons[rand_button][0] + '_' + buttons[rand_button][1]).click();
+            }
+
+            gamestart = true;//遊戲開始
+        }
+
+        /**檢查過關 */
+        function checkpass() {
+            var count = 0;
+            for (var i = 1; i <= 6; i++) {
+                for (var j = 1; j <= 6; j++) {
+                    if ($('#td_' + i + '_' + j).text() == type2) {
+                        count++;
+                    }
+                }
+            }
+            if (count == 36) {
+                alert('過關了!');
+            }
+        }
+    </script>
+</head>
+<body>
+    <table id="tb" style="border: 3px #cccccc solid;width: 500px;height: 500px;" border='1' align="center">
+        <tr>
+            <td id="td_0_0" onclick="trun(this.id,'I')">🢆</td>
+            <td id="td_0_1" onclick="trun(this.id,'V')">⬇</td>
+            <td id="td_0_2" onclick="trun(this.id,'V')">⬇</td>
+            <td id="td_0_3" onclick="trun(this.id,'V')">⬇</td>
+            <td id="td_0_4" onclick="trun(this.id,'V')">⬇</td>
+            <td id="td_0_5" onclick="trun(this.id,'V')">⬇</td>
+            <td id="td_0_6" onclick="trun(this.id,'V')">⬇</td>
+        </tr>
+        <tr>
+            <td id="td_1_0" onclick="trun(this.id,'H')">➡</td>
+            <td id="td_1_1" ></td>
+            <td id="td_1_2" ></td>
+            <td id="td_1_3" ></td>
+            <td id="td_1_4" ></td>
+            <td id="td_1_5" ></td>
+            <td id="td_1_6" ></td>
+        </tr>
+        <tr>
+            <td id="td_2_0" onclick="trun(this.id,'H')">➡</td>
+            <td id="td_2_1" ></td>
+            <td id="td_2_2" ></td>
+            <td id="td_2_3" ></td>
+            <td id="td_2_4" ></td>
+            <td id="td_2_5" ></td>
+            <td id="td_2_6" ></td>
+        </tr>
+        <tr>
+            <td id="td_3_0" onclick="trun(this.id,'H')">➡</td>
+            <td id="td_3_1" ></td>
+            <td id="td_3_2" ></td>
+            <td id="td_3_3" ></td>
+            <td id="td_3_4" ></td>
+            <td id="td_3_5" ></td>
+            <td id="td_3_6" ></td>
+        </tr>
+        <tr>
+            <td id="td_4_0" onclick="trun(this.id,'H')">➡</td>
+            <td id="td_4_1" ></td>
+            <td id="td_4_2" ></td>
+            <td id="td_4_3" ></td>
+            <td id="td_4_4" ></td>
+            <td id="td_4_5" ></td>
+            <td id="td_4_6" ></td>
+        </tr>
+        <tr>
+            <td id="td_5_0" onclick="trun(this.id,'H')">➡</td>
+            <td id="td_5_1" ></td>
+            <td id="td_5_2" ></td>
+            <td id="td_5_3" ></td>
+            <td id="td_5_4" ></td>
+            <td id="td_5_5" ></td>
+            <td id="td_5_6" ></td>
+        </tr>
+        <tr>
+            <td id="td_6_0" onclick="trun(this.id,'H')">➡</td>
+            <td id="td_6_1" ></td>
+            <td id="td_6_2" ></td>
+            <td id="td_6_3" ></td>
+            <td id="td_6_4" ></td>
+            <td id="td_6_5" ></td>
+            <td id="td_6_6" ></td>
+        </tr>
+        <tr>
+            <td id="td_7_0" onclick="trun(this.id,'I')">🢅</td>
+            <td id="td_7_1" onclick="trun(this.id,'V')">⬆</td>
+            <td id="td_7_2" onclick="trun(this.id,'V')">⬆</td>
+            <td id="td_7_3" onclick="trun(this.id,'V')">⬆</td>
+            <td id="td_7_4" onclick="trun(this.id,'V')">⬆</td>
+            <td id="td_7_5" onclick="trun(this.id,'V')">⬆</td>
+            <td id="td_7_6" onclick="trun(this.id,'V')">⬆</td>
+        </tr>
+    </table>
+</body>
+</html>

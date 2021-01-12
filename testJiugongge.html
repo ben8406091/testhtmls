@@ -1,0 +1,386 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>數字華榮道</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        td {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #ccc;
+            text-align: center;
+            vertical-align: central;
+            box-shadow: 4px 4px rgba(20%,20%,40%,0.5);
+        }
+
+        .td_empty {
+            background: #000000;
+        }
+
+        #UI_Mobile {
+            position: fixed;
+            right: 0px;
+            top: 10%;    
+            padding:10px;
+            margin-top:10%; 
+            font-size:50px;
+            background-color:rgba(69, 66, 66, 0.3);
+            cursor: pointer;
+            border-top-left-radius:10px;
+            border-bottom-left-radius:10px;
+            border:solid 1px;            
+        }
+
+        #UI_Mobile{
+            display:none;
+        }
+
+        @media{
+            #UI_Mobile{
+                display:block;
+            }
+        }
+
+    </style>
+    <script>
+        var map_row = 3;
+        var map_col = 3;
+        var keydir = '';//鍵盤方向
+        var step = 0;//步數
+        var isplaying = true;
+
+        $(function () {
+            resetMap();
+            if (isMobile() == false) {
+                $('#UI_Mobile').hide();
+                $('#mainground').attr('style', 'width: 100%;float: left');
+            }
+        });
+
+        /**全部重置 */
+        function resetMap() {
+            //初始化
+            step = 0;
+            $('#lb_step').text(step);
+            isplaying = true;
+
+
+            map_row = $('#coustom_row').val();
+            map_col = $('#coustom_col').val();
+
+            $('#tb').empty();
+            initMap();
+            initNumber();
+            checkOK();//檢查過關(天胡)
+            checkMeet();//正確位置提示
+        }
+
+        /**建立基礎地圖 */
+        function initMap() {
+            var ansernum = 1;
+            for (var i = 1; i <= map_row; i++) {
+                var insert_html = '<tr id="tr_' + i + '">●</tr>';
+                var insert_td = '';
+                for (var j = 1; j <= map_col; j++) {
+                    insert_td += '<td id="td_' + i + '_' + j + '" class="" ansernum="' + ansernum + '"></td>';
+                    ansernum++;
+                }
+                insert_html = insert_html.replace(/●/g, insert_td);
+                $('#tb').append(insert_html);
+            }
+
+            var subanser = 1;//次解
+            for (var i = map_col; i >= 1; i--) {
+                for (var j = 1; j <= map_row; j++) {
+                    $('#td_' + j + '_' + i).attr('sub_ansernum', subanser);
+                    subanser++;
+                }
+            }
+            subanser = 1;
+            for (var i = 1; i <= map_col; i++) {
+                for (var j = 1; j <= map_row; j++) {
+                    $('#td_' + j + '_' + i).attr('sub_ansernum2', subanser);
+                    subanser++;
+                }
+            }
+        }
+
+        /**建立隨機數字 */
+        function initNumber() {
+            //先計算共要多少數字
+            var number_count = map_col * map_row - 1;
+            var number_cup = [];//隨機位置
+            var number_ser = [];//隨機數字順序
+            //亂數生位置
+            for (var i = 0; i < number_count; i++) {
+                //隨機位置
+                var ranX = Math.floor(Math.random() * map_row) + 1;
+                var ranY = Math.floor(Math.random() * map_col) + 1;
+                //號碼
+                var temp = [ranX, ranY];
+                var isrepeat = false;
+                //檢查不重複
+                for (var j = 0; j < number_cup.length; j++) {
+                    if (number_cup[j][0] == temp[0] && number_cup[j][1] == temp[1]) {
+                        i--;
+                        isrepeat = true;
+                        break;
+                    }
+                }
+                if (isrepeat == true) {
+                    continue;
+                }
+                else {
+                    number_cup.push(temp);
+                }
+
+            }
+            //隨機產生數字順序
+            for (var i = 0; i < number_count; i++) {
+                var ran = Math.floor(Math.random() * number_count) + 1;
+                //檢查不重複
+                if (number_ser.indexOf(ran) == -1) {
+                    number_ser.push(ran);
+                }
+                else {
+                    i--;
+                }
+            }
+
+            //打印數字
+            for (var i = 0; i < number_cup.length; i++) {
+                $('#td_' + number_cup[i][0] + '_' + number_cup[i][1]).text(number_ser[i]);
+            }
+
+            //塗黑沒有數字的格子
+            var isfind = false;
+            for (var i = 1; i <= map_row; i++) {
+                for (var j = 1; j <= map_col; j++) {
+                    if ($('#td_' + i + '_' + j).text().trim() == '') {
+                        $('#td_' + i + '_' + j).attr('class', 'td_empty');
+                        isfind = true;
+                        break;
+                    }
+                }
+                if (isfind == true) {
+                    break;
+                }
+            }
+        }
+
+        //讀取按鍵方向
+        document.onkeydown = function (e) {  //對整個頁面文件監聽
+            if (isplaying == false) {
+                return false;
+            }
+
+            keyNum = window.event ? e.keyCode : e.which;  //獲取被按下的鍵值
+            //上W
+            if (keyNum == 38) {
+                keydir = 'U';
+            }
+            //下S
+            if (keyNum == 40) {
+                keydir = 'D';
+            }
+            //左A
+            if (keyNum == 37) {
+                keydir = 'L';
+            }
+            //右D
+            if (keyNum == 39) {
+                keydir = 'R';
+            }
+
+            //移動方塊
+            move_Block();
+        }
+
+        /**
+         * 手機板觸控UI
+         * @param key_dir 方向
+         */
+        function uiHit(key_dir) {
+            if (isplaying == false) {
+                return false;
+            }
+            keydir = key_dir;
+            //移動方塊
+            move_Block();
+        }
+
+        /**移動方塊 */
+        function move_Block() {
+            //先搜尋到空格的ID
+            var isfind = false;
+            var emptyid = '';
+            for (var i = 1; i <= map_row; i++) {
+                for (var j = 1; j <= map_col; j++) {
+                    if ($('#td_' + i + '_' + j).attr('class') == 'td_empty') {
+                        emptyid = $('#td_' + i + '_' + j).attr('id');
+                        isfind = true;
+                        break;
+                    }
+                }
+                if (isfind == true) {
+                    break;
+                }
+            }
+
+            //嘗試根據方向尋找背面的方塊
+            var objid;
+            var temp_row = parseInt(emptyid.split('_')[1]);
+            var temp_col = parseInt(emptyid.split('_')[2]);
+            switch (keydir) {
+                case 'U': // 上
+                    objid = 'td_' + (temp_row + 1) + '_' + temp_col;
+                    break;
+                case 'D': // 下
+                    objid = 'td_' + (temp_row - 1) + '_' + temp_col;
+                    break;
+                case 'L': // 左
+                    objid = 'td_' + temp_row + '_' + (temp_col + 1);
+                    break;
+                case 'R': // 右
+                    objid = 'td_' + temp_row + '_' + (temp_col - 1);
+                    break;
+            }
+
+            //和黑框互換
+            if ($('#' + objid).length > 0) {
+                $('#' + emptyid).text($('#' + objid).text());
+                $('#' + emptyid).attr('class', '');
+                $('#' + objid).text('');
+                $('#' + objid).attr('class', 'td_empty');
+
+                //更新步數
+                step++;
+                $('#lb_step').text(step);
+
+                checkOK();//檢查過關
+                checkMeet();//正確位置提示
+            }
+        }
+
+        /**檢查過關 */
+        function checkOK() {
+            var number_count = map_col * map_row - 1;//應有總分
+            var meetscore = 0;//正解分數
+            var sub_meetscore = 0;//次解分數
+            var sub_meetscore2 = 0;//次解分數2
+            //檢查答案
+            for (var i = 1; i <= map_row; i++) {
+                for (var j = 1; j <= map_col; j++) {
+                    if ($('#td_' + i + '_' + j).text() == $('#td_' + i + '_' + j).attr('ansernum')) {
+                        meetscore++;
+                    }
+                    if ($('#td_' + i + '_' + j).text() == $('#td_' + i + '_' + j).attr('sub_ansernum')) {
+                        sub_meetscore++;
+                    }
+                    if ($('#td_' + i + '_' + j).text() == $('#td_' + i + '_' + j).attr('sub_ansernum2')) {
+                        sub_meetscore2++;
+                    }
+                }
+            }
+
+            if (meetscore == number_count
+                || sub_meetscore == number_count
+                || sub_meetscore2 == number_count) {
+                alert('您過關了!');
+                isplaying = false;
+            }
+        }
+
+        /**正確的點著色 */
+        function checkMeet() {
+            //順便標記特定數字
+            var findnumber = 0;
+            if ($('#tbx_findnumber').val().trim() != '') {
+                findnumber = $('#tbx_findnumber').val().trim();
+            }
+
+            for (var i = 1; i <= map_row; i++) {
+                for (var j = 1; j <= map_col; j++) {
+                    if ($('#td_' + i + '_' + j).attr('class') != 'td_empty') {
+                        if ($('#td_' + i + '_' + j).text() == $('#td_' + i + '_' + j).attr('ansernum')) {//正解
+                            $('#td_' + i + '_' + j).attr('style', 'background:#ABFFAB');
+                        }
+                        else if ($('#td_' + i + '_' + j).text() == $('#td_' + i + '_' + j).attr('sub_ansernum')) {//側解(次解)
+                            $('#td_' + i + '_' + j).attr('style', 'background:#78FFFF');
+                        }
+                        else if ($('#td_' + i + '_' + j).text() == $('#td_' + i + '_' + j).attr('sub_ansernum2')) {//側解(次解)
+                            $('#td_' + i + '_' + j).attr('style', 'background:#FFE1AB');
+                        }
+                        else if ($('#td_' + i + '_' + j).text() == findnumber) {//找數字
+                            $('#td_' + i + '_' + j).attr('style', 'color:#FF0000');
+                        }
+                        else {
+                            $('#td_' + i + '_' + j).attr('style', '');
+                        }
+                    }
+                    else {
+                        $('#td_' + i + '_' + j).attr('style', '');
+                    }
+                }
+            }
+        }
+
+        /**變更自訂難度(顯示值) */
+        function level_change() {
+            $('#lb_coustom_row').text($('#coustom_row').val());
+            $('#lb_coustom_col').text($('#coustom_col').val());
+        }
+
+        /*判斷是不是手機*/
+        function isMobile() {
+            try { document.createEvent("TouchEvent"); return true; }
+            catch (e) { return false; }
+        }
+    </script>
+</head>
+<body>
+    <div align="center" style="font-size:1em;">
+        <table style="width:100%">
+            <tr>
+                <td style="width: 50%; box-shadow: none;">
+                    <input type="button" value="重玩/重設" onclick="resetMap()" style="font-size:0.8em" />
+                    步數：<span id="lb_step">0</span>
+                    <br />
+                    自訂橫排數：<span id="lb_coustom_row">3</span><input id="coustom_row" type="range" min="2" max="10" step="1" value="3" onchange="level_change()" style="width:50%;height:15px;"/>
+                    <br />
+                    自訂縱排數：<span id="lb_coustom_col">3</span><input id="coustom_col" type="range" min="2" max="10" step="1" value="3" onchange="level_change()" style="width:50%;height:15px;" />
+                    <br />
+                    標記號碼(數字過多時尋找用)：<input id="tbx_findnumber" type="number" min="1" max="99" onchange="checkMeet()" style="font-size:1em"/>
+                </td>
+                <td style="width: 50%; box-shadow: none; text-align: left">方向鍵←↑↓→操控方塊
+                    <br />
+                    目標為按照順序排好所有方塊(全部綠、藍或黃色)  
+                    <br />
+                    (手機遊玩時建議使用橫向介面)
+                    <br />
+                    部分牌面可能產生無解情況
+                </td>
+            </tr>
+        </table>
+    </div>
+    <br />
+    <div>
+        <div id="mainground" style="width: 80%;float: left">
+            <table id="tb" style="border: 3px #cccccc solid;right: 0px;top: 0%;" border='1' align="center">
+            </table>
+        </div>
+        <!-- 手機版UI -->
+        
+    </div>
+    <div id="UI_Mobile"  align="center">                                   
+            <span onclick="uiHit('U')">⇧</span>
+            <br />
+            <span onclick="uiHit('L')">⇦</span>
+            <span>&emsp;</span>
+            <span onclick="uiHit('R')">⇨</span>
+            <br />
+            <span onclick="uiHit('D')">⇩</span>      
+        </div>    
+</body>
+</html>
