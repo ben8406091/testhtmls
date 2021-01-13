@@ -130,24 +130,24 @@
          * @param rotationRadians 旋轉角度(弧度)
          */
         function drawRegularPolygon(sideCount, radius, centerX, centerY, strokeWidth, strokeColor, fillColor, rotationRadians) {
-            var angles = Math.PI * 2 / sideCount;
-            ctx.translate(centerX, centerY);
-            ctx.rotate(rotationRadians);
-            ctx.beginPath();
-            ctx.moveTo(radius, 0);
-            for (var i = 1; i < sideCount; i++) {
-                ctx.rotate(angles);
+            var angles = Math.PI * 2 / sideCount;//弧度=2𝝿/邊數
+            ctx.translate(centerX, centerY);//設置相對參考下筆點
+            ctx.rotate(rotationRadians);//設置前進方向的預先旋轉角度
+            ctx.beginPath();//準備下筆
+            ctx.moveTo(radius, 0);//下筆前移動至參考點的(半徑,0)
+            for (var i = 1; i < sideCount; i++) {//沿著圓周,每次旋轉到特定弧度,當作終點畫直線
+                ctx.rotate(angles);//改變算好的選轉角度
                 ctx.lineTo(radius, 0);
             }
-            ctx.closePath();
-            ctx.fillStyle = fillColor;
-            ctx.strokeStyle = strokeColor;
-            ctx.lineWidth = strokeWidth;
-            ctx.stroke();
-            ctx.fill();
-            ctx.rotate(angles * -(sideCount - 1));
-            ctx.rotate(-(rotationRadians));
-            ctx.translate(-centerX, -centerY);
+            ctx.closePath();//結束繪製
+            ctx.fillStyle = fillColor;//填滿色彩
+            ctx.strokeStyle = strokeColor;//邊框顏色
+            ctx.lineWidth = strokeWidth;//邊框寬度
+            ctx.stroke();//畫邊框
+            ctx.fill();//填滿顏色
+            ctx.rotate(angles * -(sideCount - 1));//倒轉繪製邊線時的角度
+            ctx.rotate(-(rotationRadians));//指向起點
+            ctx.translate(-centerX, -centerY);//重置參考點
         }
 
         /**初始化 */
