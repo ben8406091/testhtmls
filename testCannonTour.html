@@ -1,0 +1,690 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <link rel="shortcut icon" href="http://www.google.com/favicon.ico" />
+    <title>測試砲塔遊戲</title>
+    <script src="jquery-3.4.0.min.js"></script>
+    <style>
+        .infor {
+            border: dotted 1px;
+            font-size: 30px;
+            padding: 3px;
+            font-weight: bold;
+            color: #ab10f3;
+            width: 700px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div align="center">
+        <canvas id="myCanvas" width="700" height="700" style="border: 1px solid #d3d3d3;"></canvas>
+        <br />
+        <span id="lb_infor" class="infor">準備完成，請按開始</span>
+        &emsp;&emsp;等級：<span id="lb_Level">1</span>&emsp;
+        |&emsp;消滅：<span id="lb_score">0</span>&emsp;
+        |&emsp;HP：<span id="lb_HP">500</span>/<span id="lb_HPMAX">500</span>
+        <br />
+        火力：<span id="lb_atk">20</span>&emsp;
+        |&emsp;射程：<span id="lb_firelong">150</span>&emsp;
+        <!--|&emsp;炸彈：<span id="lb_booms">0</span>-->
+        |&emsp;靜音：<input type="checkbox" id="ckb_nosound" onchange="onoffsound()" />
+        <br />
+        <input type="button" value="操作說明" onclick="info()" />
+        <input type="button" value="重玩" onclick="location.reload()" />
+        <input id="btn_Start" type="button" value="開始" onclick="gameStart()" />
+        <input id="btn_Pause" type="button" value="暫停" onclick="gamePause()" disabled="disabled" />
+    </div>
+
+    <script>
+        //基礎設定
+        var canvas = document.getElementById("myCanvas");
+        var ctx = canvas.getContext("2d");
+        var gameplaying = false;
+        var gameover = false;//遊戲結束
+        var soundonoff = true;//打開音效
+
+        //砲塔設置
+        var angles_slider = 0;//砲管角度
+        var bullts_fly_timer;//發射子彈計時器
+        var bullets = [];//發射中的子彈
+        var bullets_flyspeed = 10;//砲彈速度
+        var maxflylong = 150;//最大射程
+        var connon_tour_xy = [canvas.width / 2, canvas.height / 2];//砲塔中心點
+        var PlayerHP = 500;//玩家血量
+        var PlayerHP_MAX = 500;//玩家血量上限
+        var score = 0;//分數
+        var level = 1;//遊戲等級
+        var fireatk = 20;//攻擊力
+        //var allkill = 0;//全滅大絕
+        var hitstarts = [];//碰撞時的星星位置,渲染後消失
+
+        //滑鼠參數
+        var offsetX, offsetY;
+        var mouseX, mouseY;
+        var mousepressing = false;//滑鼠按壓中(自動開火)
+        var autofire_timer;//自動開火
+
+        //敵人參數
+        var enemys = [];
+        var enemy_timer;
+        var enemy_creat_timer;//敵人產生器
+
+        // 取得滑鼠相對於canvas的座標
+        function reOffset() {
+            var BB = canvas.getBoundingClientRect();
+            offsetX = BB.left;
+            offsetY = BB.top;
+        }
+
+        //道具箱
+        var item_index = -1;//道具編號(-1時表示不在場上)
+        var item_xy = [0, 0];//道具箱位置
+        var item_HP = 100;//道具箱HP
+        var item_timer;//道具箱時間
+
+        reOffset();
+        window.onscroll = function (e) { reOffset(); }
+        window.onresize = function (e) { reOffset(); }
+        canvas.onresize = function (e) { reOffset(); }
+        canvas.onmousemove = handleMouseMove;
+        canvas.onmouseup = mouseup;
+        canvas.onmouseout = mouseup;
+        canvas.onmousedown = fire;
+
+        //開始
+        $(function () {
+            //追蹤一次滑鼠位置
+            angles_slider = getAngle(connon_tour_xy[0], connon_tour_xy[1], mouseX, mouseY);
+            paint();
+        });
+
+        /**遊戲暫停 */
+        function gamePause() {
+            window.clearInterval(bullts_fly_timer);
+            window.clearInterval(enemy_timer);
+            window.clearInterval(enemy_creat_timer);
+            window.clearInterval(item_timer);
+            $('#btn_Start').removeAttr('disabled');
+            $('#btn_Pause').attr('disabled', 'disabled');
+            gameplaying = false;
+            $('#lb_infor').text('遊戲暫停_(:3 」∠ )_');
+        }
+
+        /**遊戲開始及繼續 */
+        function gameStart() {
+            bullts_fly_timer = window.setInterval(bulletsfly, 50);//子彈飛行
+            enemy_timer = window.setInterval(enemy_nearing, 100);//敵人移動
+            enemy_creat_timer = window.setInterval(creatEmeny, 3500);//敵人產生
+            item_timer = window.setInterval(create_item, 30000);//30秒生成一次道具
+            $('#btn_Start').val('繼續');
+            $('#btn_Start').attr('disabled', 'disabled');
+            $('#btn_Pause').removeAttr('disabled');
+            gameplaying = true;
+            $('#lb_infor').text('遊戲進行中(ゝ∀･)b');
+        }
+
+        /**開火(滑鼠按下) */
+        function fire(e) {
+            //取消預設事件
+            e.preventDefault();
+            e.stopPropagation();
+            if (gameplaying == false) { return false; }
+
+            var bullet_prefab = {
+                x: connon_tour_xy[0], //X座標
+                y: connon_tour_xy[1], //Y座標
+                angle: angles_slider, //飛行角度
+                color: '#FF8C00',//子彈顏色
+                fly_long: 0 // 飛行距離
+            };
+            bullets.push(bullet_prefab);
+            playSound('fire_sound.mp3');
+
+            mousepressing = true;//自動開火
+            window.clearInterval(autofire_timer);
+            autofire_timer = window.setInterval(autofire, 400);
+        }
+
+        /**自動開火 */
+        function autofire() {
+            if (mousepressing == false) { return false; }
+            var bullet_prefab = {
+                x: connon_tour_xy[0], //X座標
+                y: connon_tour_xy[1], //Y座標
+                angle: angles_slider, //飛行角度
+                color: '#FF8C00',//子彈顏色
+                fly_long: 0 // 飛行距離
+            };
+            bullets.push(bullet_prefab);
+            playSound('fire_sound.mp3');
+        }
+
+        /**
+         * 滑鼠放開(解除自動開火)
+         * @param e
+         */
+        function mouseup(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.clearInterval(autofire_timer);
+            mousepressing = false;
+        }
+
+        /**生成敵人 */
+        function creatEmeny() {
+            if (gameplaying == false) { return false; }
+
+            //隨機生成座標,須排除太靠近砲塔的位置
+            var ranX = 0;
+            var ranY = 0;
+            var tempX = 0;
+            var tempY = 0;
+            var xyok = false;
+            while (xyok == false) {
+                ranX = Math.floor(Math.random() * 1401) - 700;
+                ranY = Math.floor(Math.random() * 1401) - 700;
+                tempX = ranX + connon_tour_xy[0];
+                tempY = ranY + connon_tour_xy[1];
+                if (getTwoPointLong(tempX, tempY, connon_tour_xy[0], connon_tour_xy[1]) <= 700) {
+                    xyok = false;
+                    continue;
+                }
+                xyok = true;
+            }
+            //計算指向砲塔的角度
+            var emenyAngle = getAngle(tempX, tempY, connon_tour_xy[0], connon_tour_xy[1]);
+            var addspeed = level - 1;//敵人加速,最多+11,再多可能打不到
+            if (addspeed > 11) {
+                addspeed = 11;
+            }
+            var emeny_prefab = {
+                x: tempX, //X座標
+                y: tempY, //Y座標
+                angle: emenyAngle, //飛行角度
+                color: '#FF0000',//顏色
+                HP: 70 + (level - 1) * 15, //敵人血量
+                HP_MAX: 70 + (level - 1) * 15,//敵人血量最大值
+                speed: 4 + addspeed //速度每升1等速度+1
+            };
+
+            //等級達3等時機率出現5倍血boss
+            if (level >= 3) {
+                var tempboss = Math.floor(Math.random() * 100) + 1;
+                if (tempboss <= 10) {
+                    emeny_prefab.HP = emeny_prefab.HP * 5;
+                    emeny_prefab.HP_MAX = emeny_prefab.HP_MAX * 5;
+                    emeny_prefab.color = '#FF69B4';
+                    emeny_prefab.speed = 1;
+                }
+            }
+
+            enemys.push(emeny_prefab);
+            paint();
+        }
+
+        /**子彈命中檢查 */
+        function bulletHit() {
+            for (var i = enemys.length - 1; i >= 0; i--) {
+                for (var j = bullets.length - 1; j >= 0; j--) {
+                    if (enemys[i].color == '#FF69B4') {
+                        if (getTwoPointLong(bullets[j].x, bullets[j].y, enemys[i].x, enemys[i].y) <= 15) {//子彈打中
+                            hitstarts.push(
+                                {
+                                    x: bullets[j].x,
+                                    y: bullets[j].y
+                                }
+                            );//碰撞星星
+                            bullets.splice(j, 1);//子彈移除
+                            var bulletsPower = Math.floor(Math.random() * 21) + fireatk;//子彈傷害
+                            enemys[i].HP -= bulletsPower;//敵人扣血
+                            if (enemys[i].HP <= 0) {//敵人GG
+                                playSound('Explosion.mp3');//爆炸音效
+                                enemys.splice(i, 1);
+                                score += 1;//得分
+                                $('#lb_score').text(score);
+                                $('#lb_infor').text('看砲！/(ﾟ∀ﾟ)/');
+
+                                //每幹掉20名敵人時等級上升
+                                if (score % 20 == 0) {
+                                    level++;
+                                    $('#lb_Level').text(level);
+                                    playSound('coin04.mp3');//升等音效
+                                    $('#lb_infor').text('升等了(ﾉ>ω<)ﾉ！');
+                                }
+                                break;
+                            }
+                        }
+                    } else {
+                        if (getTwoPointLong(bullets[j].x, bullets[j].y, enemys[i].x, enemys[i].y) <= 10) {//子彈打中
+                            hitstarts.push(
+                                {
+                                    x: bullets[j].x,
+                                    y: bullets[j].y
+                                }
+                            );//碰撞星星
+                            bullets.splice(j, 1);//子彈移除
+                            var bulletsPower = Math.floor(Math.random() * 21) + fireatk;//子彈傷害
+                            enemys[i].HP -= bulletsPower;//敵人扣血
+                            if (enemys[i].HP <= 0) {//敵人GG
+                                playSound('Explosion.mp3');//爆炸音效
+                                enemys.splice(i, 1);
+                                score += 1;//得分
+                                $('#lb_score').text(score);
+                                $('#lb_infor').text('看砲！/(ﾟ∀ﾟ)/');
+
+                                //每幹掉20名敵人時等級上升
+                                if (score % 20 == 0) {
+                                    level++;
+                                    $('#lb_Level').text(level);
+                                    playSound('coin04.mp3');//升等音效
+                                    $('#lb_infor').text('升等了(ﾉ>ω<)ﾉ！');
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            //檢查打中道具
+            if (item_index != -1) {
+                for (var j = bullets.length - 1; j >= 0; j--) {
+                    if (getTwoPointLong(bullets[j].x, bullets[j].y, item_xy[0], item_xy[1]) <= 25) {
+                        hitstarts.push(
+                            {
+                                x: bullets[j].x,
+                                y: bullets[j].y
+                            }
+                        );//碰撞星星
+                        bullets.splice(j, 1);//子彈移除
+                        var bulletsPower = Math.floor(Math.random() * 21) + fireatk;//子彈傷害
+                        item_HP -= bulletsPower;//道具箱扣血
+                        if (item_HP <= 0) {//道具箱打爆
+                            playSound('jump01.mp3');//獲得音效
+                            //道具效果
+                            /*道具種類：
+                             * 0 = HP+100(不超過MAX為主)
+                             * 1 = HP上限+200
+                             * 2 = 火力+5~10
+                             * 3 = 射程+10(最多480)
+                             * --4 = 全滅炸彈
+                             */
+                            switch (item_index) {
+                                case 0:
+                                    PlayerHP += 200;
+                                    if (PlayerHP > PlayerHP_MAX) {
+                                        PlayerHP = PlayerHP_MAX;
+                                    }
+                                    $('#lb_HP').text(PlayerHP);
+                                    $('#lb_infor').text('獲得血包！HP+200 d(`･∀･)b');
+                                    break;
+                                case 1:
+                                    PlayerHP_MAX += 100;
+                                    PlayerHP += 100;
+                                    if (PlayerHP > PlayerHP_MAX) {
+                                        PlayerHP = PlayerHP_MAX;
+                                    }
+                                    $('#lb_HP').text(PlayerHP);
+                                    $('#lb_HPMAX').text(PlayerHP_MAX);
+                                    $('#lb_infor').text('獲得裝甲！HP上限+100 (・ω・)');
+                                    break;
+                                case 2:
+                                    var addatk = Math.floor(Math.random() * 5) + 5;
+                                    fireatk += addatk;
+                                    $('#lb_atk').text(fireatk);
+                                    $('#lb_infor').text('獲得火藥！火力增加' + addatk + ' (ﾉ>ω<)ﾉ');
+                                    break;
+                                case 3:
+                                    maxflylong += 10;
+                                    if (maxflylong > 480) {
+                                        maxflylong = 480;
+                                    }
+                                    $('#lb_firelong').text(maxflylong);
+                                    $('#lb_infor').text('獲得瞄具強化！射程增加10 (✪ω✪)');
+                                    break;
+                                //case 4:
+                                //    allkill += 1;
+                                //    $('#lb_booms').text(allkill);
+                                //    $('#lb_infor').text('獲得清場炸彈！');
+                                //    break;
+                            }
+
+                            item_index = -1;
+                            item_xy = [0, 0];
+                            break;
+                        }
+                    }
+                }
+
+            }
+        }
+
+        /**
+         * 播放音效
+         * @param soundname 音效檔名稱
+         */
+        function playSound(soundname) {
+            if (soundonoff == false) { return false; }
+            var audio = new Audio("audio/" + soundname);//發射音效
+            audio.play();
+        }
+
+        /**
+         * 滑鼠移動(轉砲管)
+         * @param e
+         */
+        function handleMouseMove(e) {
+            if (gameover == true) { return false; }
+            //追蹤移動位置
+            mouseX = parseInt(e.clientX - offsetX);
+            mouseY = parseInt(e.clientY - offsetY);
+            angles_slider = getAngle(connon_tour_xy[0], connon_tour_xy[1], mouseX, mouseY);
+            paint();
+        }
+
+        /**子彈屬性更新 */
+        function bulletsfly() {
+            if (gameplaying == false) { return false; }
+            if (bullets.length == 0) { return false; }
+            for (var i = bullets.length - 1; i >= 0; i--) {
+                if (bullets[i].fly_long > maxflylong) {
+                    bullets.splice(i, 1);//超界移除
+                }
+                else {
+                    bullets[i].fly_long += bullets_flyspeed;//距離增加
+                    //更新XY座標
+                    var temp = getNewPoint(connon_tour_xy[0], connon_tour_xy[1], bullets[i].angle, bullets[i].fly_long);
+                    bullets[i].x = parseInt(temp[0]);
+                    bullets[i].y = parseInt(temp[1]);
+                }
+            }
+
+            bulletHit();//檢查碰撞
+            paint();
+        }
+
+        /**敵人靠近 */
+        function enemy_nearing() {
+            if (gameplaying == false) { return false; }
+            for (var i = enemys.length - 1; i >= 0; i--) {
+                if (getTwoPointLong(enemys[i].x, enemys[i].y, 350, 350) <= 30) {//撞到砲塔
+                    //玩家受傷
+                    PlayerHP -= enemys[i].HP;//玩家扣血=敵人剩餘血量
+                    $('#lb_HP').text(PlayerHP);
+                    playSound('Explosion.mp3');//爆炸音效
+                    $('#lb_infor').text('被打惹(つд⊂)');
+                    hitstarts.push(
+                        {
+                            x: enemys[i].x,
+                            y: enemys[i].y
+                        }
+                    );
+                    enemys.splice(i, 1);//消失
+
+                    if (PlayerHP <= 0) {
+                        PlayerHP = 0;
+                        $('#lb_infor').text('我掛惹！(◞‸◟)');
+                        gameplaying = false;
+                        gameover = true;
+                        window.clearInterval(bullts_fly_timer);
+                        window.clearInterval(enemy_timer);
+                        window.clearInterval(enemy_creat_timer);
+                        window.clearInterval(item_timer);
+                        $('#btn_Pause').attr('disabled', 'disabled');
+                        $('#btn_Start').attr('disabled', 'disabled');
+                        paint();
+                    }                    
+                }
+                else {
+                    //偏角修正
+                    var emenyAngle = getAngle(enemys[i].x, enemys[i].y, connon_tour_xy[0], connon_tour_xy[1]);
+                    enemys[i].angle = emenyAngle;
+                    //計算現在點的[方向]下個點在哪
+                    var newpoint = getNewPoint(enemys[i].x, enemys[i].y, enemys[i].angle, enemys[i].speed);
+                    enemys[i].x = parseInt(newpoint[0]);
+                    enemys[i].y = parseInt(newpoint[1]);
+                }
+
+            }
+            paint();
+        }
+
+        /**產生道具箱 */
+        function create_item() {
+            if (gameplaying == false) { return false; }
+            /*道具種類：
+             * 0 = HP+100(不超過MAX為主)
+             * 1 = HP上限+200
+             * 2 = 火力+5~10
+             * 3 = 射程+10(最多480)
+             * --4 = 全滅炸彈
+             */
+            if (item_index != -1) { return; }//一次最多一個
+
+            //item_index = Math.floor(Math.random() * 5);
+            item_index = Math.floor(Math.random() * 4);
+            //隨機生成位置(有點距離,但又不至於超出射程)
+            var ranX = 0;
+            var ranY = 0;
+            var tempX = 0;
+            var tempY = 0;
+            var pointOK = false;
+            while (pointOK == false) {
+                ranX = Math.floor(Math.random() * maxflylong * 2) - maxflylong;
+                ranY = Math.floor(Math.random() * maxflylong * 2) - maxflylong;
+                tempX = ranX + connon_tour_xy[0];
+                tempY = ranY + connon_tour_xy[1];
+                if (getTwoPointLong(tempX, tempY, connon_tour_xy[0], connon_tour_xy[1]) < maxflylong / 2) {
+                    pointOK = false;
+                    continue;
+                }
+                else if (getTwoPointLong(tempX, tempY, connon_tour_xy[0], connon_tour_xy[1]) > maxflylong + 25) {
+                    pointOK = false;
+                    continue;
+                }
+                pointOK = true;
+            }
+
+            item_xy = [tempX, tempY];
+            item_HP = 100;
+            paint();
+        }
+
+        /**作畫 */
+        function paint() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);//清除
+
+            //畫砲塔HP
+            ctx.beginPath();//開始路徑
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(connon_tour_xy[0] - 35, connon_tour_xy[1] + 20, 70, 10);
+            ctx.fillStyle = 'rgba(34,139,34,1)';
+            var HP_width = (PlayerHP / PlayerHP_MAX) * 70;
+            ctx.fillRect(connon_tour_xy[0] - 35, connon_tour_xy[1] + 20, HP_width, 10);
+
+            //畫砲管            
+            ctx.beginPath();//開始路徑
+            ctx.fillStyle = '#000088';
+            ctx.strokeStyle = 'rgba(0,0,255,1)';//設定顏色
+            ctx.arc(connon_tour_xy[0], connon_tour_xy[1], 15, 0, 2 * Math.PI);//砲塔底座
+            ctx.fill();
+            ctx.lineWidth = 8;//線寬
+            ctx.strokeStyle = '#0000FF';//設定顏色
+            ctx.save();//先儲存基本設置
+            ctx.translate(connon_tour_xy[0], connon_tour_xy[1]);//設置假中點=畫布中心
+            ctx.rotate(angles_slider * Math.PI / 180);//旋轉弧度=角度*𝝿/180
+            ctx.moveTo(0, 0);//下筆點移置(變更設定後的)(0,0)
+            ctx.lineTo(30, 0);//畫線到X長度(X,0)
+            ctx.stroke();//畫線
+            ctx.restore();//恢復設置
+
+            //畫道具箱
+            if (item_index != -1) {
+                ctx.beginPath();
+                ctx.fillStyle = '#4169E1';
+                ctx.fillRect(item_xy[0] - 25, item_xy[1] - 25, 50, 50);
+                ctx.font = '30px Arial';
+                ctx.fillStyle = '#00FF00';
+                ctx.fillText("?", item_xy[0] - 8, item_xy[1] + 8);
+            }
+
+            //畫敵人
+            for (var i = 0; i < enemys.length; i++) {
+                ctx.beginPath();//開始路徑
+                ctx.fillStyle = enemys[i].color;
+                if (enemys[i].color == '#FF69B4') {
+                    ctx.arc(enemys[i].x, enemys[i].y, 15, 0, 2 * Math.PI);
+                }
+                else {
+                    ctx.arc(enemys[i].x, enemys[i].y, 10, 0, 2 * Math.PI);
+                }
+                ctx.fill();
+                //敵人HP
+                ctx.beginPath();
+                if (enemys[i].color == '#FF69B4') {//巨大敵人
+                    ctx.fillStyle = '#8B0000';
+                    ctx.fillRect(enemys[i].x - 14, enemys[i].y + 15, 30, 5);
+                    ctx.fillStyle = '#008000';
+                    ctx.fillRect(enemys[i].x - 14, enemys[i].y + 15, ((enemys[i].HP / enemys[i].HP_MAX) * 30), 5);
+                }
+                else {
+                    ctx.fillStyle = '#8B0000';
+                    ctx.fillRect(enemys[i].x - 10.5, enemys[i].y + 10, 20, 5);
+                    ctx.fillStyle = '#008000';
+                    ctx.fillRect(enemys[i].x - 10.5, enemys[i].y + 10, ((enemys[i].HP / enemys[i].HP_MAX) * 20), 5);
+                }
+            }
+
+            //畫子彈
+            for (var i = 0; i < bullets.length; i++) {
+                ctx.beginPath();//開始路徑
+                ctx.fillStyle = bullets[i].color;
+                ctx.arc(bullets[i].x, bullets[i].y, 5, 0, 2 * Math.PI);
+                ctx.fill();
+            }
+
+            //畫星星
+            for (var i = hitstarts.length - 1; i >= 0; i--) {
+                drawstar(hitstarts[i].x, hitstarts[i].y, 10, 5);
+                hitstarts.splice(i, 1);
+            }
+
+            //遊戲暫停
+            if (gameplaying == false && gameover == false) {
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.fillRect(200, 100, 100, canvas.height *0.7);
+                ctx.fillRect(400, 100, 100, canvas.height *0.7);
+
+            }
+
+            //遊戲結束
+            if (gameover == true) {
+                ctx.beginPath();
+                ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.font = '40px Arial bold';
+                ctx.fillStyle = '#000000';
+                ctx.fillText("ＧＡＭＥ ＯＶＥＲ！", 180, 330);
+            }
+        }
+
+        /**
+         * 取得兩點間的角度
+         * @param px
+         * @param py
+         * @param mx
+         * @param my
+         */
+        function getAngle(px, py, mx, my) {
+            return Math.round(Math.atan2(my - py, mx - px) * 180 / Math.PI);//記得Y軸與數學上是相反的,電腦Y軸+是往下
+        }
+
+        /**
+         * 已知一點座標、角度、距離，求點B
+         * @param sx 起始點X座標
+         * @param sy 起始點Y座標
+         * @param angle 角度
+         * @param bevel 距離
+         */
+        function getNewPoint(sx, sy, angle, bevel) {
+            var radian = angle * Math.PI / 180;//改成弧度角
+            var xMargin = Math.cos(radian) * bevel;
+            var yMargin = Math.sin(radian) * bevel;
+
+            var ex = Math.round(sx + xMargin);
+            var ey = Math.round(sy + yMargin);
+            return [ex, ey];
+        }
+
+        /**
+         * 取得兩點距離
+         * @param x1 起點X座標
+         * @param y1 起點Y座標
+         * @param x2 終點X座標
+         * @param x2 終點Y座標
+         */
+        function getTwoPointLong(x1, y1, x2, y2) {
+            var a = Math.abs(x1 - x2);
+            var b = Math.abs(y1 - y2);
+            return Math.round(Math.sqrt(a * a + b * b));
+        }
+
+        /**遊戲說明 */
+        function info() {
+            var msg = '操作說明：\n\
+點按滑鼠可以開砲\n\
+按著不放可以連續開砲(但較慢)\n\
+目標為消滅不斷靠近的紅點敵人\n\
+被敵人撞到時會減少HP\n\
+每30秒會出現隨機物資包輔助\n\
+每消滅20名敵人，等級會上升，敵方難度會漸增';
+
+            if (gameStart == true) {
+                gamePause();
+                alert(msg);
+                gameStart();
+            }
+            else {
+                alert(msg);
+            }
+        }
+
+        /**音效開關 */
+        function onoffsound() {
+            if ($('#ckb_nosound').prop('checked') == true) {
+                soundonoff = false;
+                $('#lb_infor').text('音效關閉🔇');
+            }
+            else {
+                soundonoff = true;
+                $('#lb_infor').text('音效開啟🔈');
+            }
+        }
+
+        /**
+         * 畫出星星
+         * @param x X座標
+         * @param y Y座標
+         * @param outerR 內徑
+         * @param innnerR 外徑
+         * @param rot 旋轉角度
+         */
+        function drawstar(x, y, outerR, innnerR) {
+            var rot = Math.random() * 360;
+            ctx.beginPath();
+            for (var i = 0; i < 5; i++) {
+                ctx.lineTo(Math.cos((18 + i * 72 - rot) / 180 * Math.PI) * outerR + x, -Math.sin((18 + i * 72 - rot) / 180 * Math.PI) * outerR + y);
+                ctx.lineTo(Math.cos((54 + i * 72 - rot) / 180 * Math.PI) * innnerR + x, -Math.sin((54 + i * 72 - rot) / 180 * Math.PI) * innnerR + y);
+            }
+            ctx.closePath();
+            ctx.fillStyle = "#FFFF00";
+            ctx.fill();
+        }
+    </script>
+</body>
+</html>
