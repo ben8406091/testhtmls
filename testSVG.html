@@ -1,0 +1,359 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+<body>
+    矩形：
+    <br />
+    <svg>
+        <rect id="A" x="33" y="34" fill="#FF6CC4" stroke="#C30D23" stroke-width="3" width="75" height="75" />
+        <rect id="B" x="119" y="54" fill="#6EA9FF" stroke="#036EB7" stroke-width="3" width="117" height="55" />
+    </svg>
+    <br />
+
+    圓角矩形：rect屬性內額外增加rx、ry的圓角半徑屬性
+    <br />
+    <svg>
+        <rect x="60" y="10" rx="10" ry="10" width="75" height="75" stroke="#FF5500" stroke-width="5" fill="#FFB255" />
+    </svg>
+    <br />
+
+    圓形：cx/cy表示圓心,r=半徑,
+    如果不偏移有可能導致被其他html元素切到
+    <br />
+    <svg>
+        <circle fill="#FF4343" stroke="#890000" stroke-width="5" cx="80.141" cy="73.446" r="44" />
+    </svg>
+    <br />
+    橢圓：cx/cy表示圓心、rx/ry表示X軸與Y軸的半徑
+    <br />
+    <svg>
+        <ellipse fill="#77DD47" stroke="#246614" stroke-width="5" cx="100" cy="75" rx="67" ry="44" />
+    </svg>
+    <br />
+    多邊形：直接定義頂點座標後自動連線,頂點公式為：「x1,y1 x2,y2...」中間用半型空白分隔，
+    至少需要3個點才有圖像,半形空白可以多打
+    <br />
+    <svg>
+        <polygon fill="#D271FF" points="100,56 62,107 37,49" />
+        <!--三角-->
+        <polygon fill="#68EADD" points="151,39 163,63 189,66 170,85 175,111 151,99 127,111 132,85 
+            113,66 139,63 " />
+        <!--星形-->
+        <polygon fill="#FF7900" points="219,110 206,70 240,46 274,70 261,110 " />
+        <!--五邊形-->
+    </svg>
+    <br />
+    <hr />
+
+    Path路徑：透過指令匯出圖案
+    <br />
+    <svg>
+        <path d="M0 0 C40 40,60 40,100,0" stroke="black" stroke-width="2" fill="none" />
+    </svg>
+    <br />
+    Path A(圓弧)路徑：<br />
+    A  橢圓的x軸半徑，<br />
+    橢圓的y軸半徑，<br />
+    弧線與X軸的夾角(旋轉角度)，<br />
+    large-arc-flag：1為大角度弧線，0 為小角度弧線 ( 必須有三個點 )，<br />
+    sweep-flag：1為順時針方向，0為逆時針方向，<br />
+    終點X座標，<br />
+    終點Y座標
+    <br />
+    <br />
+    "M300 10 A100,20,0,0,0,350,110" = 「起點在(300,10)，X軸半徑100，Y軸半徑20，旋轉角度0，小角度弧線，逆時鐘方向，終點在(350,110)」
+    <br />
+    <svg>
+        <path d="M300 10 A100,20,0,0,0,350,110" stroke="black" stroke-width="2" fill="none" />
+    </svg>
+    <br />
+    "M0 10 A100 20,0 0 1 50 110" = 「起點在(0,10)，X軸半徑100，Y軸半徑20，旋轉角度0，小角度弧線，順時鐘方向，終點在(50,110)」
+    <br />
+    <svg>
+        <path d="M0 10 A100 20,0,0,1,50,110" stroke="black" stroke-width="2" fill="none" />
+    </svg>
+    <hr />
+
+    Fill填滿色：<br />
+    普通顏色：<br />
+    <svg>
+        <rect x="50" y="40" width="100" height="100" stroke="#000" stroke-width="10" fill="#f40"></rect>
+    </svg>
+    <br />
+    漸層顏色：<br />
+    要先在＜svg＞裡面寫定義檔＜defs＞＜/defs＞，再去吃設定<br />
+    線性漸層  linearGradient：<br />
+    <svg width="1000">
+        <defs>
+            <!-- 注意ID是全域的,其他svg也會用到 -->
+            <linearGradient id="a1">
+                <!--linearGradient線性漸層，id=要被呼叫的定義名稱-->
+                <stop offset="5%" stop-color="#F00" />
+                <!--指定顏色-->
+                <stop offset="95%" stop-color="#ff0" />
+            </linearGradient>
+        </defs>
+        <!--吃定義檔時,再要放的設置放url(#ID)-->
+
+        <rect x="10" y="10" width="100" height="100" stroke="#000" stroke-width="5" fill="url(#a1)"></rect>
+        <circle cx="170" cy="60" r="50" stroke="#000" stroke-width="5" fill="url(#a1)"></circle>
+        <rect x="230" y="10" width="100" height="100" stroke="url(#a1)" stroke-width="5" fill="none"></rect>
+    </svg>
+    <br />
+    放射狀漸層  radialGradient：<br />
+    <svg width="1000">
+        <defs>
+            <radialGradient id="a2">
+                <stop offset="5%" stop-color="#ff0" />
+                <stop offset="95%" stop-color="#f00" />
+            </radialGradient>
+        </defs>
+
+        <rect x="10" y="10" width="100" height="100" stroke="#000" stroke-width="5" fill="url(#a2)"></rect>
+        <circle cx="170" cy="60" r="50" stroke="#000" stroke-width="5" fill="url(#a2)"></circle>
+        <rect x="230" y="10" width="100" height="100" stroke="url(#a2)" stroke-width="5" fill="none"></rect>
+    </svg>
+    <br />
+    垂直線性漸層(或其他方向)：linearGradient .x1/y1  x2/y2可以定義兩點參考點<br />
+    <svg width="1000">
+        <defs>
+            <linearGradient id="a3" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="5%" stop-color="#F00" />
+                <stop offset="95%" stop-color="#ff0" />
+            </linearGradient>
+        </defs>
+
+        <rect x="10" y="10" width="100" height="100" stroke="#000" stroke-width="5" fill="url(#a3)"></rect>
+        <circle cx="170" cy="60" r="50" stroke="#000" stroke-width="5" fill="url(#a3)"></circle>
+        <rect x="230" y="10" width="100" height="100" stroke="url(#a3)" stroke-width="5" fill="none"></rect>
+    </svg>
+    <br />
+    斜線漸層：<br />
+    <svg width="1000">
+        <defs>
+            <linearGradient id="a4" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="5%" stop-color="#F00" />
+                <stop offset="95%" stop-color="#ff0" />
+            </linearGradient>
+        </defs>
+
+        <rect x="10" y="10" width="100" height="100" stroke="#000" stroke-width="5" fill="url(#a4)"></rect>
+        <circle cx="170" cy="60" r="50" stroke="#000" stroke-width="5" fill="url(#a4)"></circle>
+        <rect x="230" y="10" width="100" height="100" stroke="url(#a4)" stroke-width="5" fill="none"></rect>
+    </svg>
+    <br />
+    放射狀漸層+其他中心：調整cx/xy<br />
+    <svg width="1000">
+        <defs>
+            <radialGradient id="a5" cx="20%" cy="40%">
+                <stop offset="5%" stop-color="#ff0" />
+                <stop offset="95%" stop-color="#f00" />
+            </radialGradient>
+        </defs>
+
+        <rect x="10" y="10" width="100" height="100" stroke="#000" stroke-width="5" fill="url(#a5)"></rect>
+        <circle cx="170" cy="60" r="50" stroke="#000" stroke-width="5" fill="url(#a5)"></circle>
+        <rect x="230" y="10" width="100" height="100" stroke="url(#a5)" stroke-width="5" fill="none"></rect>
+    </svg>
+    <br />
+    圖案重複填滿 pattern ：<br />
+    <svg width="1000">
+        <defs>
+            <pattern id="a6" patternUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
+                <rect x="0" y="0" width="25" height="25" stroke="#none" fill="#09f"></rect>
+            </pattern>
+        </defs>
+        <circle cx="60" cy="60" r="50" stroke="#000" stroke-width="5" fill="url(#a6)"></circle>
+    </svg>
+    <hr />
+
+    text 文字<br />
+    基本用法：直接放在＜text＞＜/text＞中，並適當放style<br />
+    <svg width="1000">
+        <text x="50" y="20">TEXT</text>
+        <text x="50" y="40" fill="#09c">Fill</text>
+        <text x="50" y="60" stroke="#f00">Stroke</text>
+        <text x="50" y="90" stroke="#0a0" style="font-size: 24px;">使用 STYLE</text>
+        <text x="200" y="0" style="font-size: 24px; writing-mode: vertical-lr;">垂直文字</text>
+    </svg>
+    <br />
+    陣列XY單獨指定各文字的xy座標,超出未指定的則自動接續：<br />
+    <svg width="1000">
+        <text x="0" y="30" style="font-size: 24px;">單純的文字表現</text>
+        <text x="0,20,50,80,120" y="60,80,70,55,60" style="font-size: 24px;">每個字都可以不同</text>
+    </svg>
+    <br />
+    dx/dy相對位置：<br />
+    <svg width="1000">
+        <text x="0,10,20,30,40,50,60" y="30">這是使用x,y</text>
+        <text x="0" y="60" dx="0,10,20,30,40,50,60,">這是使用dx,dy</text>
+    </svg>
+    <br />
+    rotate順時針旋轉角度：如果只有1個值則全部套用<br />
+    <svg width="1000">
+        <text x="0" y="60" rotate="30" style="font-size: 24px;">旋轉文字</text>
+        <text x="0" y="90" rotate="30,60,90,120,150,180,210" style="font-size: 24px;">旋轉每一個文字</text>
+    </svg>
+    <br />
+    textLength：設定這段文字的長度 / lengthAdjust：設定這段文字的方式<br />
+    <svg width="1000">
+        <text x="0" y="30" textLength="200" lengthAdjust="spacing">spacing調整間距直到滿足寬度</text>
+        <text x="0" y="60" textLength="300" lengthAdjust="spacing">spacing調整間距直到滿足寬度</text>
+        <text x="0" y="90" textLength="400" lengthAdjust="spacing">spacing調整間距直到滿足寬度</text>
+        <text x="0" y="120" textLength="700" lengthAdjust="spacingAndGlyphs">spacingAndGlyphs拉扁每個字以滿足</text>
+    </svg>
+    <hr />
+    tspan：相當於text裡面的文字群組,可視為html span,為每個字詞組設定樣式，參數與text相同<br />
+    <svg width="1000">
+        <text x="50" y="20">
+            <tspan fill="#000">The tspan element</tspan>
+            <tspan x="10" y="40" fill="#f00">The tspan element</tspan>
+            <tspan x="10,20,30,60,90,150,200,220" y="60" fill="#0a0">The tspan element</tspan>
+            <tspan x="10" y="80,90,80,85,100,80" fill="#00f">The tspan element</tspan>
+        </text>
+    </svg>
+    <svg width="1000">
+        <text x="50" y="20">
+            <tspan x="10,20,30,40,50" y="60" fill="#000">element</tspan>
+            <tspan x="10" y="80" dx="0,10,20,30,40,50" fill="#f60">element</tspan>
+        </text>
+    </svg>
+    <svg width="1000">
+        <text x="50" y="20">
+            <tspan x="10" y="30" fill="#000" rotate="20" style="font-size: 24px;">element</tspan>
+            <tspan x="10" y="60" fill="#f00" rotate="20,30,40,50,60,70,80" style="font-size: 24px;">element</tspan>
+        </text>
+    </svg>
+    <hr />
+    textPath：搭配路徑排版path 與設定檔defs，設定樣式連結時使用 xlink:href<br />
+    <svg width="1000">
+        <defs>
+            <path id="t1" d="M0 50 C150 150 100 -50 300 50" stroke="#000" fill="none" />
+            <!--波浪線路徑-->
+        </defs>
+        <text>
+            <textPath xlink:href="#t1">這是隨著路徑跑的文字，很酷吧</textPath>
+        </text>
+        <text dy="30">
+            <textPath startOffset="30%" xlink:href="#t1">這是隨著路徑跑的文字，很酷吧</textPath>
+            <!--startOffset可以設定相對起始位置-->
+        </text>
+    </svg>
+    <hr />
+    遮罩 clipPath：在defs內加入clipPath，放在裡面的圖形蓋上連結的圖形，遮罩範圍外的會被切掉<br />
+    繪圖中使用clip-path="url(#ID)"來連結裁切<br />
+    <svg width="1000" height="200">
+        <defs>
+            <clipPath id="c1">
+                <rect x="0" y="0" width="200" height="100" />
+                <!--建立一個(0,0)~(200,100)的矩形遮罩-->
+            </clipPath>
+        </defs>
+        <circle cx="100" cy="100" r="100" clip-path="url(#c1)" fill="#000" />
+        <!--有遮罩版本-->
+        <circle cx="350" cy="100" r="100" fill="#000" />
+        <!--無遮罩版本-->
+    </svg>
+    <br />
+    巢狀遮罩的嵌套：在其他的clipPath 加入 clip-path="url(#其他遮罩ID)"<br />
+    *use標籤複製來自連結其他的已定義圖形，原圖形變更的話它也會一起變<br />
+    如果原物體已經有設定 fill 或 stroke ，則use無法透過 style 來覆寫樣式<br />
+    <svg width="1000" height="200">
+        <clipPath id="d1">
+            <polygon id="a1Shape" points="100,10 40,180 190,60 10,60 160,180 100,10" stroke="blue" />
+            <!--星型+藍外框-->
+        </clipPath>
+        <clipPath id="d2">
+            <circle id="a2Shape" cx="100" cy="100" r="65" />
+            <!--圓形-->
+        </clipPath>
+
+        <!-- Intersection -->
+        <clipPath id="b1" clip-path="url(#d1)">
+            <use x="0" y="0" width="200" height="200" xlink:href="#a2Shape" />
+        </clipPath>
+        <clipPath id="b2">
+            <use x="0" y="0" width="200" height="200" xlink:href="#a1Shape" />
+            <use x="0" y="0" width="200" height="200" xlink:href="#a2Shape" />
+        </clipPath>
+
+        <rect x="10" y="10" width="180" height="180" fill="#c00"
+            clip-path="url(#d1)" />
+        <!--矩形 - 星型遮罩-->
+        <rect x="10" y="10" width="180" height="180" fill="#0a0"
+            clip-path="url(#d2)" transform="translate(200)" />
+        <!--矩形 - 圓型遮罩-->
+        <rect x="10" y="10" width="180" height="180" fill="#09c"
+            clip-path="url(#b1)" transform="translate(400)" />
+        <!--矩形 - (星行遮罩 + 圓型遮罩)-->
+        <rect x="10" y="10" width="180" height="180" fill="#f90"
+            clip-path="url(#b2)" transform="translate(600)" />
+        <!--矩形 - (星行遮罩 - 圓型遮罩)-->
+    </svg>
+    <hr />
+    遮色片 mask：如果fill的RBG色值越高(#FFF)表示透明度越低，底色+基色影響較強烈/值越低(#000透明度越低,會吃掉部分底圖顏色)<br />
+    基礎：在＜mask＞裡面放繪圖物件,直接蓋上去<br />
+    <svg width="1000" height="200">
+        <defs>
+            <mask id="mask1">
+                <rect x="50" y="50" width="100" height="100" fill="#ccc" />
+                <!--淡灰色-->
+                <rect x="150" y="150" width="50" height="50" fill="#fff" />
+                <!--白色-->
+            </mask>
+        </defs>
+        <rect id="box1" x="50" y="50" width="150" height="150" fill="#0f0" />
+        <!--底圖：綠色-->
+        <rect id="box2" x="50" y="50" width="150" height="150" fill="#f00" mask="url(#mask1)" />
+        <!--貼上一個基色為紅色的遮罩
+            基紅+蓋掉遮色的白=紅色
+            基紅+蓋掉淺灰=紅+底圖綠=棕色-->
+    </svg>
+    <br />
+    不同透明度的遮色：F-B-9-6-2,底圖為紅：<br />
+    <svg width="1000" height="100">
+        <defs>
+            <mask id="M1">
+                <rect x="0" y="0" width="50" height="50" fill="#fff" />
+            </mask>
+            <mask id="M2">
+                <rect x="50" y="0" width="50" height="50" fill="#bbb" />
+            </mask>
+            <mask id="M3">
+                <rect x="100" y="0" width="50" height="50" fill="#999" />
+            </mask>
+            <mask id="M4">
+                <rect x="150" y="0" width="50" height="50" fill="#666" />
+            </mask>
+            <mask id="M5">
+                <rect x="200" y="0" width="50" height="50" fill="#222" />
+            </mask>
+        </defs>
+        <rect x="0" y="0" width="50" height="50" fill="#f00" mask="url(#M1)" />
+        <rect x="50" y="0" width="50" height="50" fill="#f00" mask="url(#M2)" />
+        <rect x="100" y="0" width="50" height="50" fill="#f00" mask="url(#M3)" />
+        <rect x="150" y="0" width="50" height="50" fill="#f00" mask="url(#M4)" />
+        <rect x="200" y="0" width="50" height="50" fill="#f00" mask="url(#M5)" />
+    </svg>
+    <br />
+    直接設定不透明度以搭配漸層色：<br />
+    <svg width="1000" height="200">
+        <defs>
+            <!--設定線性漸層，同樣都白色但不透明度0~1-->
+            <linearGradient id="Gradient">
+                <stop offset="0" stop-color="white" stop-opacity="0" />
+                <stop offset="1" stop-color="white" stop-opacity="1" />
+            </linearGradient>
+            <mask id="Mask"><!--建立遮罩-->
+                <rect x="0" y="0" width="200" height="200" fill="url(#Gradient)" />
+            </mask>
+        </defs>
+        <!--設定底圖綠，基色紅的遮色片-->
+        <rect x="0" y="0" width="200" height="200" fill="green" />
+        <rect x="0" y="0" width="200" height="200" fill="red" mask="url(#Mask)" />
+    </svg>
+</body>
+</html>
